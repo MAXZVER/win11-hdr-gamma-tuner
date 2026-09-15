@@ -36,6 +36,9 @@ $CurrentLut   = Join-Path $Root 'current.cal'
 $SettingsFile = Join-Path $Root 'tuner-settings.json'
 $IconFile     = Join-Path $Root 'Display-Tuner.ico'
 $IconFileOff  = Join-Path $Root 'Display-Tuner-off.ico'
+# ярлык в папке автозагрузки: не требует прав администратора, в отличие
+# от задачи в планировщике, и виден пользователю в привычном месте
+$StartupLnk   = Join-Path ([Environment]::GetFolderPath('Startup')) 'Display Tuner.lnk'
 
 # потолок панели у каждого свой; ставится мастером Calibrate.ps1
 $DefaultSliderNits = 252
@@ -85,6 +88,9 @@ $Strings = @{
         TestBand     = 'Banding (band-test)'
         TestColor    = 'Colour (color-test)'
         TestClip     = 'White ceiling (clip-test)'
+        Autostart    = 'Start with Windows'
+        StartupOn    = 'autostart on'
+        StartupOff   = 'autostart off'
         Calibrate    = 'Calibrate panel...'
         NotCalibrated = 'panel not calibrated yet - press Calibrate'
     }
@@ -123,6 +129,9 @@ $Strings = @{
         TestBand     = 'Полосение (band-test)'
         TestColor    = 'Цвет (color-test)'
         TestClip     = 'Потолок белого (clip-test)'
+        Autostart    = 'Запускать при входе'
+        StartupOn    = 'автозапуск включён'
+        StartupOff   = 'автозапуск выключен'
         Calibrate    = 'Калибровать панель…'
         NotCalibrated = 'панель ещё не откалибрована — нажмите «Калибровать»'
     }
@@ -248,7 +257,7 @@ $appIconOff = if (Test-Path $IconFileOff) { New-Object System.Drawing.Icon $Icon
 
 $form                 = New-Object System.Windows.Forms.Form
 $form.Text            = $Loc.Title
-$form.Size            = New-Object System.Drawing.Size(500, 460)
+$form.Size            = New-Object System.Drawing.Size(500, 496)
 $form.StartPosition   = 'CenterScreen'
 $form.FormBorderStyle = 'FixedSingle'
 $form.MaximizeBox     = $false
@@ -349,10 +358,17 @@ $btnHide.FlatStyle = 'System'
 $form.Controls.Add($btnHide)
 
 $lblGameHint = New-Label '' 20 340 450 16 8 $false $dim
-$lblStatus = New-Label '' 20 358 330 18 8 $false $dim
+
+$chkAuto = New-Object System.Windows.Forms.CheckBox
+$chkAuto.Location = New-Object System.Drawing.Point(18, 364)
+$chkAuto.Size = New-Object System.Drawing.Size(280, 24)
+$chkAuto.FlatStyle = 'System'
+$form.Controls.Add($chkAuto)
+
+$lblStatus = New-Label '' 20 396 450 18 8 $false $dim
 
 $cboLang = New-Object System.Windows.Forms.ComboBox
-$cboLang.Location = New-Object System.Drawing.Point(368, 354)
+$cboLang.Location = New-Object System.Drawing.Point(368, 364)
 $cboLang.Size = New-Object System.Drawing.Size(94, 22)
 $cboLang.DropDownStyle = 'DropDownList'
 $cboLang.FlatStyle = 'System'
@@ -449,6 +465,26 @@ function Set-Preset([string]$Key) {
     $trkGamma.Value = [int][math]::Round($script:Gamma * 10)
     Invoke-Now
     $lblStatus.Text = $Loc.ProfileSet -f (Get-PresetLabel $Key)
+}
+
+function Test-Autostart { return (Test-Path $StartupLnk) }
+
+function Set-Autostart([bool]$On) {
+    try {
+        if ($On) {
+            $exe = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+            $ws = New-Object -ComObject WScript.Shell
+            $lnk = $ws.CreateShortcut($StartupLnk)
+            $lnk.TargetPath = $exe
+            $lnk.Arguments = '-Tray'
+            $lnk.WorkingDirectory = $Root
+            $lnk.Description = 'Display Tuner'
+            $lnk.Save()
+        } elseif (Test-Path $StartupLnk) {
+            Remove-Item $StartupLnk -Force
+        }
+        return $true
+    } catch { return $false }
 }
 
 function Show-MainWindow {
@@ -579,6 +615,7 @@ function Update-Language {
         $testMenu.Items[$i].Text = [string]$testLabels[$i]
     }
 
+    $chkAuto.Text = $Loc.Autostart
     if ($itCalibrate) { $itCalibrate.Text = $Loc.Calibrate }
     $itShow.Text = $Loc.ShowWindow
     $itQuit.Text = $Loc.Quit
@@ -593,6 +630,15 @@ function Update-Language {
 
     Set-ButtonRow -Buttons @($btnToggle, $btnTests, $btnHide) -StartX 18 -Y 298 -Height 38 -Gap 8 -MinWidth 90 -RightEdge 462
 }
+
+$chkAuto.Add_CheckedChanged({
+    if (Set-Autostart $chkAuto.Checked) {
+        $lblStatus.Text = if ($chkAuto.Checked) { $Loc.StartupOn } else { $Loc.StartupOff }
+    } else {
+        $lblStatus.Text = $Loc.Error -f 'autostart'
+        $chkAuto.Checked = (Test-Autostart)
+    }
+})
 
 $cboLang.Add_SelectedIndexChanged({
     $code = switch ($cboLang.SelectedIndex) { 1 { 'en' } 2 { 'ru' } default { 'auto' } }
@@ -610,8 +656,16 @@ $cboLang.Add_SelectedIndexChanged({
 Update-Language
 $lblStatus.Text = $Loc.Ready
 
+$chkAuto.Checked = Test-Autostart
+
 if ($Tray) {
-    Invoke-Now
+    # Дисплей на логоне инициализируется не мгновенно: если применить кривую
+    # сразу, гамма-рамп потом затрётся. Раньше эту задержку давал планировщик,
+    # теперь она своя - значок в трее при этом появляется сразу.
+    $boot = New-Object System.Windows.Forms.Timer
+    $boot.Interval = 15000
+    $boot.Add_Tick({ $boot.Stop(); Invoke-Now })
+    $boot.Start()
 } else {
     # окно поднимаем из таймера, уже внутри цикла сообщений
     $boot = New-Object System.Windows.Forms.Timer

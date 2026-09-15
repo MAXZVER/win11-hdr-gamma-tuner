@@ -86,11 +86,13 @@ Draws the icon and compiles `DisplayTuner.exe` with the compiler shipped in
 Detects the monitor and GPU, generates the curve, walks you through the manual
 steps and verifies the curve actually landed in the ramp.
 
-**5. Autostart** (as administrator):
+**5. Autostart:** tick *Start with Windows* in the app.
 
-```powershell
-.\Setup.bat -RegisterAutoStart
-```
+That drops a shortcut into the Startup folder — no administrator rights, no
+scheduled task, and you can see and remove it where you would expect. In
+background mode the app waits 15 seconds before applying the curve, because
+the display is not fully initialised right after logon and the ramp would be
+wiped.
 
 ---
 

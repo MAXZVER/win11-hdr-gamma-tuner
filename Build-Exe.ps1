@@ -38,7 +38,9 @@ $code = @'
 using System;
 using System.IO;
 using System.Reflection;
+using System.Threading;
 using System.Management.Automation;
+using System.Management.Automation.Runspaces;
 using System.Windows.Forms;
 
 static class Host
@@ -46,49 +48,66 @@ static class Host
     [STAThread]
     static int Main(string[] args)
     {
-        // скрипт лежит рядом с exe
         string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
         string script = Path.Combine(dir, "Display-Tuner.ps1");
         if (!File.Exists(script))
         {
-            MessageBox.Show("Не найден Display-Tuner.ps1 рядом с программой:\n" + dir,
-                            "Яркость дисплея", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show("Display-Tuner.ps1 not found next to: " + dir,
+                            "Display Tuner", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         }
 
         try
         {
-            using (PowerShell ps = PowerShell.Create())
-            {
-                ps.AddCommand(script);
-                // -Tray (переключатель) и -Lang en (параметр со значением)
-                for (int i = 0; i < args.Length; i++)
-                {
-                    string a = args[i];
-                    if (!a.StartsWith("-") || a.Length < 2) continue;
-                    string name = a.Substring(1);
-                    if (i + 1 < args.Length && !args[i + 1].StartsWith("-"))
-                    {
-                        ps.AddParameter(name, args[i + 1]);
-                        i++;
-                    }
-                    else ps.AddParameter(name);
-                }
-                ps.Invoke();
+            // The machine ExecutionPolicy is usually Restricted, and running a
+            // script by path runs into it. The policy is set for our own runspace
+            // rather than changed system-wide: touching the user's settings to
+            // launch our app would be rude.
+            InitialSessionState iss = InitialSessionState.CreateDefault();
+            iss.ExecutionPolicy = Microsoft.PowerShell.ExecutionPolicy.Bypass;
 
-                if (ps.Streams.Error.Count > 0)
+            using (Runspace rs = RunspaceFactory.CreateRunspace(iss))
+            {
+                // WinForms needs STA and the same thread as Main
+                rs.ApartmentState = ApartmentState.STA;
+                rs.ThreadOptions = PSThreadOptions.UseCurrentThread;
+                rs.Open();
+
+                using (PowerShell ps = PowerShell.Create())
                 {
-                    string msg = "";
-                    foreach (ErrorRecord e in ps.Streams.Error) msg += e.ToString() + "\n";
-                    MessageBox.Show(msg, "Яркость дисплея: ошибка",
-                                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return 2;
+                    ps.Runspace = rs;
+                    ps.AddCommand(script);
+
+                    // -Tray is a switch, -Lang en is a parameter with a value
+                    for (int i = 0; i < args.Length; i++)
+                    {
+                        string a = args[i];
+                        if (!a.StartsWith("-") || a.Length < 2) continue;
+                        string name = a.Substring(1);
+                        if (i + 1 < args.Length && !args[i + 1].StartsWith("-"))
+                        {
+                            ps.AddParameter(name, args[i + 1]);
+                            i++;
+                        }
+                        else ps.AddParameter(name);
+                    }
+
+                    ps.Invoke();
+
+                    if (ps.Streams.Error.Count > 0)
+                    {
+                        string msg = "";
+                        foreach (ErrorRecord e in ps.Streams.Error) msg += e.ToString() + Environment.NewLine;
+                        MessageBox.Show(msg, "Display Tuner: error",
+                                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return 2;
+                    }
                 }
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.ToString(), "Яркость дисплея: сбой",
+            MessageBox.Show(ex.ToString(), "Display Tuner: failure",
                             MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 3;
         }
