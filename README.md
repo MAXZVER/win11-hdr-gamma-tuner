@@ -138,13 +138,30 @@ codes in equal measure, and dimming drops out of the equation.
 
 ## Calibrating your own panel
 
-The white ceiling differs per panel, and everything else hangs off it.
+The white ceiling differs per panel, and everything else hangs off it. The
+spec sheet is usually optimistic: the panel this was built on holds 255 nits
+full-field where DisplayHDR 600 promises 350.
 
-1. Open `clip-test.html`, pair 255/250, fullscreen, hold for 30–40 seconds
-   (ABL does not kick in immediately).
-2. Lower the Windows slider until the stripes become distinguishable.
-3. Feed the result in: `Setup.bat -SliderNits <nits>`,
-   where nits = 80 + 4 × slider percent.
+Run the wizard: **Tests → Calibrate panel…** in the app, or `Calibrate.ps1`
+directly.
+
+![Calibration wizard](screenshot-calibrate.png)
+
+It asks you to park the Windows slider at 100% once, then does the rest
+itself: the curve can map SDR white to any level *below* the slider, so the
+wizard sweeps that level in software and shows a stripe pattern. You only
+answer whether the stripes are visible. Binary search narrows the ceiling to
+5 nits in three to five minutes, and the result is written to
+`tuner-settings.json`.
+
+The pattern is stripes of two close codes across the whole screen rather than
+a patch on a background — that way every backlight zone holds both codes
+equally and local dimming, which many monitors will not let you disable,
+drops out of the measurement.
+
+If you would rather do it by hand, `clip-test.html` is the same test driven
+manually; feed the result in with `Setup.bat -SliderNits <nits>`,
+where nits = 80 + 4 × slider percent.
 
 ---
 

@@ -37,10 +37,9 @@ $SettingsFile = Join-Path $Root 'tuner-settings.json'
 $IconFile     = Join-Path $Root 'Display-Tuner.ico'
 $IconFileOff  = Join-Path $Root 'Display-Tuner-off.ico'
 
-$SliderNits = 252     # where the Windows slider is parked (43%)
-$SliderPct  = [int](($SliderNits - 80) / 4)
-$MinNits    = 80
-$MaxNits    = 252
+# потолок панели у каждого свой; ставится мастером Calibrate.ps1
+$DefaultSliderNits = 252
+$MinNits = 80
 
 # profile keys are stable; only the labels are translated
 $PresetKeys = @('day', 'evening', 'night')
@@ -78,6 +77,7 @@ $Strings = @{
         ShowWindow   = 'Show window'
         GameToggle   = 'Game mode (drop the curve)'
         Quit         = 'Quit'
+        Restart      = 'Settings saved. The app will restart to pick them up.'
         Day          = 'Day'
         Evening      = 'Evening'
         Night        = 'Night'
@@ -85,6 +85,8 @@ $Strings = @{
         TestBand     = 'Banding (band-test)'
         TestColor    = 'Colour (color-test)'
         TestClip     = 'White ceiling (clip-test)'
+        Calibrate    = 'Calibrate panel...'
+        NotCalibrated = 'panel not calibrated yet - press Calibrate'
     }
     ru = @{
         Title        = 'Яркость дисплея'
@@ -113,6 +115,7 @@ $Strings = @{
         ShowWindow   = 'Показать окно'
         GameToggle   = 'Игровой режим (снять кривую)'
         Quit         = 'Выход'
+        Restart      = 'Настройки сохранены. Приложение перезапустится, чтобы их подхватить.'
         Day          = 'День'
         Evening      = 'Вечер'
         Night        = 'Ночь'
@@ -120,6 +123,8 @@ $Strings = @{
         TestBand     = 'Полосение (band-test)'
         TestColor    = 'Цвет (color-test)'
         TestClip     = 'Потолок белого (clip-test)'
+        Calibrate    = 'Калибровать панель…'
+        NotCalibrated = 'панель ещё не откалибрована — нажмите «Калибровать»'
     }
 }
 
@@ -130,6 +135,8 @@ function Get-DefaultSettings {
         Gamma   = 2.6
         Enabled = $true
         Lang    = 'auto'
+        SliderNits = $DefaultSliderNits
+        Ceiling    = 0
         Presets = [ordered]@{
             day     = [ordered]@{ White = 220; Gamma = 2.2 }
             evening = [ordered]@{ White = 140; Gamma = 2.6 }
@@ -147,6 +154,8 @@ function Read-Settings {
         if ($null -ne $j.Gamma)   { $s.Gamma   = [double]$j.Gamma }
         if ($null -ne $j.Enabled) { $s.Enabled = [bool]$j.Enabled }
         if ($null -ne $j.Lang)    { $s.Lang    = [string]$j.Lang }
+        if ($null -ne $j.SliderNits) { $s.SliderNits = [int]$j.SliderNits }
+        if ($null -ne $j.Ceiling)    { $s.Ceiling    = [int]$j.Ceiling }
         if ($null -ne $j.Presets) {
             # старые файлы держали профили под русскими именами
             $legacy = @{ day = 'День'; evening = 'Вечер'; night = 'Ночь' }
@@ -168,6 +177,11 @@ function Write-Settings($s) {
 }
 
 $settings = Read-Settings
+
+$SliderNits = [int]$settings.SliderNits
+if ($SliderNits -lt 120 -or $SliderNits -gt 480) { $SliderNits = $DefaultSliderNits }
+$SliderPct  = [int][math]::Round(($SliderNits - 80) / 4)
+$MaxNits    = $SliderNits
 
 # язык: ключ запуска важнее файла, файл важнее системы
 $pick = if ($Lang -ne 'auto') { $Lang }
@@ -356,6 +370,17 @@ foreach ($entry in @(
     $item.Tag = $entry.File
     $item.Add_Click({ Start-Process (Join-Path $Root $this.Tag) })
 }
+[void]$testMenu.Items.Add('-')
+$itCalibrate = $testMenu.Items.Add([string]$Loc.Calibrate)
+$itCalibrate.Add_Click({
+    Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+        '-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',
+        ('"' + (Join-Path $Root 'Calibrate.ps1') + '"')) -Wait
+    # мастер перезаписал настройки - перечитываем и перезапускаемся
+    [System.Windows.Forms.MessageBox]::Show($Loc.Restart, $Loc.Title) | Out-Null
+    Start-Process -FilePath ([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName)
+    Stop-App
+})
 
 $trayIcon = New-Object System.Windows.Forms.NotifyIcon
 $trayIcon.Icon = $appIcon
@@ -527,6 +552,7 @@ function Update-Language {
         $testMenu.Items[$i].Text = [string]$testLabels[$i]
     }
 
+    if ($itCalibrate) { $itCalibrate.Text = $Loc.Calibrate }
     $itShow.Text = $Loc.ShowWindow
     $itQuit.Text = $Loc.Quit
 
