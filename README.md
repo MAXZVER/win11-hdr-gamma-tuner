@@ -5,7 +5,7 @@ almost nothing.
 
 [Русская версия](README.ru.md)
 
-![Display Tuner](screenshot.png)
+![Display Tuner](screenshot-en.png)
 
 Built for a Dell UltraSharp U4025QW, but it works on any panel: the numbers that
 matter are measured with the bundled test pages.
@@ -107,9 +107,11 @@ steps and verifies the curve actually landed in the ramp.
 - settings persist in `tuner-settings.json`.
 
 Switches: `-Tray` starts in the background with a tray icon (this is what
-autostart registers), `-Apply` applies the saved settings and exits.
+autostart registers), `-Apply` applies the saved settings and exits,
+`-Lang en|ru` forces a language.
 
-> The UI is currently Russian only.
+The interface follows the system locale — English everywhere except Russian
+systems. Override it with `-Lang` or the `Lang` field in `tuner-settings.json`.
 
 ---
 
