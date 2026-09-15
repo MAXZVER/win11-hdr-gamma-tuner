@@ -111,7 +111,9 @@ autostart registers), `-Apply` applies the saved settings and exits,
 `-Lang en|ru` forces a language.
 
 The interface follows the system locale — English everywhere except Russian
-systems. Override it with `-Lang` or the `Lang` field in `tuner-settings.json`.
+systems. There is a language selector in the bottom right of the window
+(Auto / English / Русский); it switches live, no restart. The `-Lang` switch
+and the `Lang` field in `tuner-settings.json` do the same.
 
 ---
 

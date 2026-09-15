@@ -258,9 +258,9 @@ function New-Label([string]$Text, [int]$X, [int]$Y, [int]$W, [int]$H, [double]$S
 $dim = [System.Drawing.Color]::FromArgb(120, 120, 120)
 
 $lblState = New-Label '' 20 16 400 30 15 $true $null
-[void](New-Label ($Loc.SliderHint -f $SliderPct) 20 46 400 18 8 $false $dim)
+$lblSliderHint = New-Label '' 20 46 400 18 8 $false $dim
 
-[void](New-Label $Loc.Brightness 20 82 180 18 9 $false $dim)
+$lblBrightness = New-Label '' 20 82 180 18 9 $false $dim
 $lblWhite = New-Label '' 300 82 120 18 9 $true $null
 $lblWhite.TextAlign = 'MiddleRight'
 
@@ -275,7 +275,7 @@ $trkWhite.LargeChange = 10
 $trkWhite.Value = [math]::Max($MinNits, [math]::Min($MaxNits, [int]$settings.White))
 $form.Controls.Add($trkWhite)
 
-[void](New-Label $Loc.Gamma 20 156 180 18 9 $false $dim)
+$lblGammaCap = New-Label '' 20 156 180 18 9 $false $dim
 $lblGamma = New-Label '' 300 156 120 18 9 $true $null
 $lblGamma.TextAlign = 'MiddleRight'
 
@@ -290,7 +290,7 @@ $trkGamma.LargeChange = 2
 $trkGamma.Value = [math]::Max(18, [math]::Min(32, [int][math]::Round([double]$settings.Gamma * 10)))
 $form.Controls.Add($trkGamma)
 
-[void](New-Label $Loc.Profiles 20 230 200 18 9 $false $dim)
+$lblProfiles = New-Label '' 20 230 200 18 9 $false $dim
 
 $presetButtons = @{}
 $px = 18
@@ -334,8 +334,17 @@ $btnHide.Location = New-Object System.Drawing.Point(326, 298)
 $btnHide.FlatStyle = 'System'
 $form.Controls.Add($btnHide)
 
-[void](New-Label $Loc.GameHint 20 340 410 16 8 $false $dim)
-$lblStatus = New-Label '' 20 358 410 18 8 $false $dim
+$lblGameHint = New-Label '' 20 340 410 16 8 $false $dim
+$lblStatus = New-Label '' 20 358 300 18 8 $false $dim
+
+$cboLang = New-Object System.Windows.Forms.ComboBox
+$cboLang.Location = New-Object System.Drawing.Point(330, 354)
+$cboLang.Size = New-Object System.Drawing.Size(92, 22)
+$cboLang.DropDownStyle = 'DropDownList'
+$cboLang.FlatStyle = 'System'
+[void]$cboLang.Items.AddRange(@('Auto', 'English', 'Русский'))
+$cboLang.SelectedIndex = switch ($settings.Lang) { 'en' { 1 } 'ru' { 2 } default { 0 } }
+$form.Controls.Add($cboLang)
 
 $testMenu = New-Object System.Windows.Forms.ContextMenuStrip
 foreach ($entry in @(
@@ -366,7 +375,6 @@ function Save-Now {
     $settings.White   = $script:White
     $settings.Gamma   = $script:Gamma
     $settings.Enabled = $script:Enabled
-    $settings.Lang    = $pick
     Write-Settings $settings
 }
 
@@ -474,10 +482,12 @@ $itShow = $trayMenu.Items.Add([string]$Loc.ShowWindow)
 $itShow.Font = New-Object System.Drawing.Font($trayMenu.Font, [System.Drawing.FontStyle]::Bold)
 $itShow.Add_Click({ Show-MainWindow })
 [void]$trayMenu.Items.Add('-')
+$trayPresetItems = @{}
 foreach ($key in $PresetKeys) {
     $it = $trayMenu.Items.Add([string](Get-PresetLabel $key))
     $it.Tag = $key
     $it.Add_Click({ Set-Preset $this.Tag })
+    $trayPresetItems[$key] = $it
 }
 [void]$trayMenu.Items.Add('-')
 $itToggle = $trayMenu.Items.Add([string]$Loc.GameToggle)
@@ -495,7 +505,48 @@ $form.Add_FormClosing({
     if (-not $script:Quitting) { $e.Cancel = $true; $form.Hide() }
 })
 
-Update-Labels
+function Update-Language {
+    $form.Text          = $Loc.Title
+    $lblSliderHint.Text = $Loc.SliderHint -f $SliderPct
+    $lblBrightness.Text = $Loc.Brightness
+    $lblGammaCap.Text   = $Loc.Gamma
+    $lblProfiles.Text   = $Loc.Profiles
+    $lblGameHint.Text   = $Loc.GameHint
+    $btnSave.Text       = $Loc.SaveHere
+    $btnTests.Text      = $Loc.Tests
+    $btnHide.Text       = $Loc.ToTray
+    $trayIcon.Text      = $Loc.Title
+
+    foreach ($key in $PresetKeys) {
+        $presetButtons[$key].Text = [string](Get-PresetLabel $key)
+        if ($trayPresetItems[$key]) { $trayPresetItems[$key].Text = [string](Get-PresetLabel $key) }
+    }
+
+    $testLabels = @($Loc.TestShadow, $Loc.TestBand, $Loc.TestColor, $Loc.TestClip)
+    for ($i = 0; $i -lt $testMenu.Items.Count -and $i -lt $testLabels.Count; $i++) {
+        $testMenu.Items[$i].Text = [string]$testLabels[$i]
+    }
+
+    $itShow.Text = $Loc.ShowWindow
+    $itQuit.Text = $Loc.Quit
+
+    Update-Labels   # состояние, кнопка игрового режима, подсказка в трее
+}
+
+$cboLang.Add_SelectedIndexChanged({
+    $code = switch ($cboLang.SelectedIndex) { 1 { 'en' } 2 { 'ru' } default { 'auto' } }
+    $settings.Lang = $code
+    # auto - снова спросить систему
+    $script:pick = if ($code -ne 'auto') { $code }
+                   elseif ((Get-Culture).TwoLetterISOLanguageName -eq 'ru') { 'ru' }
+                   else { 'en' }
+    $script:Loc = $Strings[$script:pick]
+    Update-Language
+    Write-Settings $settings
+    $lblStatus.Text = $Loc.Ready
+})
+
+Update-Language
 $lblStatus.Text = $Loc.Ready
 
 if ($Tray) {
