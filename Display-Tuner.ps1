@@ -248,7 +248,7 @@ $appIconOff = if (Test-Path $IconFileOff) { New-Object System.Drawing.Icon $Icon
 
 $form                 = New-Object System.Windows.Forms.Form
 $form.Text            = $Loc.Title
-$form.Size            = New-Object System.Drawing.Size(460, 450)
+$form.Size            = New-Object System.Drawing.Size(500, 460)
 $form.StartPosition   = 'CenterScreen'
 $form.FormBorderStyle = 'FixedSingle'
 $form.MaximizeBox     = $false
@@ -271,16 +271,16 @@ function New-Label([string]$Text, [int]$X, [int]$Y, [int]$W, [int]$H, [double]$S
 
 $dim = [System.Drawing.Color]::FromArgb(120, 120, 120)
 
-$lblState = New-Label '' 20 16 400 30 15 $true $null
-$lblSliderHint = New-Label '' 20 46 400 18 8 $false $dim
+$lblState = New-Label '' 20 16 450 30 15 $true $null
+$lblSliderHint = New-Label '' 20 46 450 18 8 $false $dim
 
-$lblBrightness = New-Label '' 20 82 180 18 9 $false $dim
-$lblWhite = New-Label '' 300 82 120 18 9 $true $null
+$lblBrightness = New-Label '' 20 82 220 18 9 $false $dim
+$lblWhite = New-Label '' 320 82 140 18 9 $true $null
 $lblWhite.TextAlign = 'MiddleRight'
 
 $trkWhite = New-Object System.Windows.Forms.TrackBar
 $trkWhite.Location = New-Object System.Drawing.Point(18, 102)
-$trkWhite.Size = New-Object System.Drawing.Size(404, 45)
+$trkWhite.Size = New-Object System.Drawing.Size(444, 45)
 $trkWhite.Minimum = $MinNits
 $trkWhite.Maximum = $MaxNits
 $trkWhite.TickFrequency = 20
@@ -289,13 +289,13 @@ $trkWhite.LargeChange = 10
 $trkWhite.Value = [math]::Max($MinNits, [math]::Min($MaxNits, [int]$settings.White))
 $form.Controls.Add($trkWhite)
 
-$lblGammaCap = New-Label '' 20 156 180 18 9 $false $dim
-$lblGamma = New-Label '' 300 156 120 18 9 $true $null
+$lblGammaCap = New-Label '' 20 156 220 18 9 $false $dim
+$lblGamma = New-Label '' 320 156 140 18 9 $true $null
 $lblGamma.TextAlign = 'MiddleRight'
 
 $trkGamma = New-Object System.Windows.Forms.TrackBar
 $trkGamma.Location = New-Object System.Drawing.Point(18, 176)
-$trkGamma.Size = New-Object System.Drawing.Size(404, 45)
+$trkGamma.Size = New-Object System.Drawing.Size(444, 45)
 $trkGamma.Minimum = 18      # 1.8, step 0.1
 $trkGamma.Maximum = 32      # 3.2
 $trkGamma.TickFrequency = 2
@@ -304,7 +304,7 @@ $trkGamma.LargeChange = 2
 $trkGamma.Value = [math]::Max(18, [math]::Min(32, [int][math]::Round([double]$settings.Gamma * 10)))
 $form.Controls.Add($trkGamma)
 
-$lblProfiles = New-Label '' 20 230 200 18 9 $false $dim
+$lblProfiles = New-Label '' 20 230 300 18 9 $false $dim
 
 $presetButtons = @{}
 $px = 18
@@ -348,12 +348,12 @@ $btnHide.Location = New-Object System.Drawing.Point(326, 298)
 $btnHide.FlatStyle = 'System'
 $form.Controls.Add($btnHide)
 
-$lblGameHint = New-Label '' 20 340 410 16 8 $false $dim
-$lblStatus = New-Label '' 20 358 300 18 8 $false $dim
+$lblGameHint = New-Label '' 20 340 450 16 8 $false $dim
+$lblStatus = New-Label '' 20 358 330 18 8 $false $dim
 
 $cboLang = New-Object System.Windows.Forms.ComboBox
-$cboLang.Location = New-Object System.Drawing.Point(330, 354)
-$cboLang.Size = New-Object System.Drawing.Size(92, 22)
+$cboLang.Location = New-Object System.Drawing.Point(368, 354)
+$cboLang.Size = New-Object System.Drawing.Size(94, 22)
 $cboLang.DropDownStyle = 'DropDownList'
 $cboLang.FlatStyle = 'System'
 [void]$cboLang.Items.AddRange(@('Auto', 'English', 'Русский'))
@@ -530,6 +530,33 @@ $form.Add_FormClosing({
     if (-not $script:Quitting) { $e.Cancel = $true; $form.Hide() }
 })
 
+# Ширина надписи зависит от языка, поэтому кнопки расставляются по замеру
+# текста, а не по заранее вбитым координатам. Иначе русские подписи налезают
+# друг на друга.
+function Set-ButtonRow {
+    param([array]$Buttons, [int]$StartX, [int]$Y, [int]$Height, [int]$Gap, [int]$MinWidth, [int]$RightEdge)
+    $pad = 22
+    $widths = @()
+    foreach ($b in $Buttons) {
+        $w = [System.Windows.Forms.TextRenderer]::MeasureText($b.Text, $b.Font).Width + $pad
+        if ($w -lt $MinWidth) { $w = $MinWidth }
+        $widths += $w
+    }
+    $total = ($widths | Measure-Object -Sum).Sum + $Gap * ($Buttons.Count - 1)
+    $avail = $RightEdge - $StartX
+    if ($total -gt $avail -and $total -gt 0) {
+        # не влезает - ужимаем пропорционально, чтобы не выехать за окно
+        $k = $avail / $total
+        for ($i = 0; $i -lt $widths.Count; $i++) { $widths[$i] = [int][math]::Floor($widths[$i] * $k) }
+    }
+    $x = $StartX
+    for ($i = 0; $i -lt $Buttons.Count; $i++) {
+        $Buttons[$i].Location = New-Object System.Drawing.Point([int]$x, [int]$Y)
+        $Buttons[$i].Size = New-Object System.Drawing.Size([int]$widths[$i], [int]$Height)
+        $x += $widths[$i] + $Gap
+    }
+}
+
 function Update-Language {
     $form.Text          = $Loc.Title
     $lblSliderHint.Text = $Loc.SliderHint -f $SliderPct
@@ -557,6 +584,14 @@ function Update-Language {
     $itQuit.Text = $Loc.Quit
 
     Update-Labels   # состояние, кнопка игрового режима, подсказка в трее
+
+    # раскладка зависит от длины подписей, поэтому пересчитывается после перевода
+    $row1 = @()
+    foreach ($key in $PresetKeys) { $row1 += $presetButtons[$key] }
+    $row1 += $btnSave
+    Set-ButtonRow -Buttons $row1 -StartX 18 -Y 250 -Height 32 -Gap 8 -MinWidth 80 -RightEdge 462
+
+    Set-ButtonRow -Buttons @($btnToggle, $btnTests, $btnHide) -StartX 18 -Y 298 -Height 38 -Gap 8 -MinWidth 90 -RightEdge 462
 }
 
 $cboLang.Add_SelectedIndexChanged({
