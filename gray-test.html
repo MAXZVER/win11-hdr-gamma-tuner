@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тест градаций серого</title>
+<style>
+  :root{
+    --ink:#8a8a8a;
+    --ink-dim:#4a4a4a;
+    --rule:#242424;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#000;color:var(--ink);font-family:var(--mono)}
+  body{padding:0 0 6rem}
+
+  header{padding:2.5rem 2rem 1.25rem;border-bottom:1px solid var(--rule)}
+  h1{font-size:.8rem;font-weight:500;letter-spacing:.18em;text-transform:uppercase}
+  header p{margin-top:.6rem;font-size:.72rem;line-height:1.7;color:var(--ink-dim);max-width:62ch}
+
+  section{padding:2.25rem 2rem;border-bottom:1px solid var(--rule)}
+  h2{font-size:.7rem;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
+  .note{margin-top:.5rem;font-size:.7rem;line-height:1.7;color:var(--ink-dim);max-width:70ch}
+
+  .strip{display:flex;margin-top:1.5rem;height:15vh;min-height:110px}
+  .strip div{flex:1;position:relative}
+  .strip span{
+    position:absolute;bottom:-1.35rem;left:50%;transform:translateX(-50%);
+    font-size:.6rem;color:var(--ink-dim);letter-spacing:.04em
+  }
+  .strip.labelled{margin-bottom:1.6rem}
+
+  .ramp{margin-top:1.5rem;height:12vh;min-height:90px;
+    background:linear-gradient(to right,#000,#fff)}
+
+  .match{display:flex;gap:0;margin-top:1.5rem;height:18vh;min-height:130px}
+  .match>div{flex:1;position:relative}
+  .dither{
+    background-image:repeating-linear-gradient(to bottom,#fff 0 1px,#000 1px 2px);
+  }
+  .match span{position:absolute;bottom:-1.35rem;left:50%;transform:translateX(-50%);
+    font-size:.6rem;color:var(--ink-dim)}
+  .match-wrap{margin-bottom:1.6rem}
+
+  kbd{color:var(--ink);font-family:var(--mono)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Тест градаций серого</h1>
+  <p>Открой на весь экран (<kbd>F11</kbd>), масштаб браузера 100%, свет в комнате приглушить,
+     дать глазам минуту привыкнуть к темноте. Цифры под плашками — значение в 8-битном коде.</p>
+</header>
+
+<section>
+  <h2>1 · Тени 0–20</h2>
+  <p class="note">Главный тест. Считай, начиная с какой цифры плашка отличается от соседней слева.
+     Норма — различать примерно с 2–4. Если всё сливается до 12–15, тени клипятся.</p>
+  <div class="strip labelled" id="shadow"></div>
+</section>
+
+<section>
+  <h2>2 · Тени 20–60</h2>
+  <p class="note">Здесь шаги должны быть очевидны все до одного и выглядеть равномерными —
+     без «ступеньки», где два соседних вдруг сильно разъезжаются.</p>
+  <div class="strip labelled" id="shadow2"></div>
+</section>
+
+<section>
+  <h2>3 · Полный градиент</h2>
+  <p class="note">Ищи вертикальные полосы и резкий перелом яркости около 70% ширины —
+     это след излома в кривой.</p>
+  <div class="ramp"></div>
+</section>
+
+<section>
+  <h2>4 · Света 235–255</h2>
+  <p class="note">Белый не должен «съедать» верхние ступени: 250 и 255 обязаны различаться.</p>
+  <div class="strip labelled" id="high"></div>
+</section>
+
+<section class="match-wrap">
+  <h2>5 · Проверка гаммы</h2>
+  <p class="note">Слева полосатое поле (среднее = 50% линейного света), справа сплошные плашки.
+     Отойди на 2–3 метра или прищурься: полосы должны слиться с плашкой 186 при гамме 2.2
+     и примерно с 176 при 2.4. Работает только при 100% масштабе браузера.</p>
+  <div class="match">
+    <div class="dither"><span>полосы</span></div>
+    <div style="background:#a2a2a2"><span>162</span></div>
+    <div style="background:#b0b0b0"><span>176</span></div>
+    <div style="background:#bababa"><span>186</span></div>
+    <div style="background:#c4c4c4"><span>196</span></div>
+  </div>
+</section>
+
+<script>
+  const build = (el, from, to, step = 1) => {
+    let html = "";
+    for (let v = from; v <= to; v += step) {
+      const c = `rgb(${v},${v},${v})`;
+      html += `<div style="background:${c}"><span>${v}</span></div>`;
+    }
+    el.innerHTML = html;
+  };
+  build(document.getElementById("shadow"), 0, 20);
+  build(document.getElementById("shadow2"), 20, 60, 2);
+  build(document.getElementById("high"), 235, 255);
+</script>
+
+</body>
+</html>

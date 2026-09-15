@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тест насыщенности</title>
+<style>
+  :root{
+    --ink:#8a8a8a;
+    --ink-dim:#4a4a4a;
+    --rule:#242424;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#000;color:var(--ink);font-family:var(--mono)}
+  body{padding:0 0 5rem}
+
+  header{padding:2.5rem 2rem 1.25rem;border-bottom:1px solid var(--rule)}
+  h1{font-size:.8rem;font-weight:500;letter-spacing:.18em;text-transform:uppercase}
+  header p{margin-top:.6rem;font-size:.72rem;line-height:1.7;color:var(--ink-dim);max-width:66ch}
+
+  section{padding:2rem;border-bottom:1px solid var(--rule)}
+  h2{font-size:.7rem;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--ink)}
+  .note{margin-top:.5rem;font-size:.7rem;line-height:1.7;color:var(--ink-dim);max-width:72ch}
+
+  .row{display:flex;margin-top:1.4rem;margin-bottom:1.7rem;height:11vh;min-height:78px}
+  .row div{flex:1;position:relative}
+  .row span{
+    position:absolute;bottom:-1.3rem;left:50%;transform:translateX(-50%);
+    font-size:.58rem;color:var(--ink-dim);letter-spacing:.03em
+  }
+  .lbl{font-size:.62rem;color:var(--ink-dim);margin-top:1.2rem;letter-spacing:.1em;text-transform:uppercase}
+
+  .sweep{margin-top:1.2rem;height:9vh;min-height:64px;display:flex}
+  .sweep div{flex:1}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Тест насыщенности</h1>
+  <p>Открой на весь экран (<kbd>F11</kbd>). Проверяет, не упирается ли цвет в границу
+     гамута при поднятой насыщенности. Логика та же, что в тесте потолка белого:
+     если соседние ступени перестали различаться — канал клипается, детали в этом
+     цвете потеряны.</p>
+</header>
+
+<section>
+  <h2>1 · Верхние ступени по каналам</h2>
+  <p class="note">Коды от 235 до 255 для каждого основного цвета. Все ступени должны
+     оставаться различимыми. Если у красного они сливаются, а у зелёного и синего нет —
+     Digital Vibrance выкручен слишком высоко: красный примари вынесен за sRGB дальше
+     остальных и упирается первым.</p>
+  <div class="lbl">красный</div><div class="row" id="r"></div>
+  <div class="lbl">зелёный</div><div class="row" id="g"></div>
+  <div class="lbl">синий</div><div class="row" id="b"></div>
+</section>
+
+<section>
+  <h2>2 · Вторичные</h2>
+  <p class="note">Жёлтый, голубой, пурпурный — те же верхние ступени. Жёлтый содержит
+     красный, поэтому обычно ломается вторым после чистого красного.</p>
+  <div class="lbl">жёлтый</div><div class="row" id="y"></div>
+  <div class="lbl">голубой</div><div class="row" id="c"></div>
+  <div class="lbl">пурпурный</div><div class="row" id="m"></div>
+</section>
+
+<section>
+  <h2>3 · Насыщенность от серого к чистому</h2>
+  <p class="note">Переход от нейтрали к полной насыщенности при постоянной светлоте.
+     Ищи участок, где полосы перестают меняться и упираются в плато — это и есть
+     граница гамута. Чем раньше плато, тем сильнее перебор.</p>
+  <div class="lbl">красный</div><div class="sweep" id="sr"></div>
+  <div class="lbl">зелёный</div><div class="sweep" id="sg"></div>
+  <div class="lbl">синий</div><div class="sweep" id="sb"></div>
+</section>
+
+<script>
+  const top = (el, mk) => {
+    let html = "";
+    for (let v = 235; v <= 255; v++) {
+      html += `<div style="background:${mk(v)}"><span>${v}</span></div>`;
+    }
+    el.innerHTML = html;
+  };
+  top(document.getElementById("r"), v => `rgb(${v},0,0)`);
+  top(document.getElementById("g"), v => `rgb(0,${v},0)`);
+  top(document.getElementById("b"), v => `rgb(0,0,${v})`);
+  top(document.getElementById("y"), v => `rgb(${v},${v},0)`);
+  top(document.getElementById("c"), v => `rgb(0,${v},${v})`);
+  top(document.getElementById("m"), v => `rgb(${v},0,${v})`);
+
+  // от серого 180 к чистому цвету: падает только минорная пара каналов
+  const sweep = (el, idx) => {
+    let html = "";
+    for (let s = 0; s <= 32; s++) {
+      const minor = Math.round(180 - (180 * s) / 32);
+      const c = [minor, minor, minor];
+      c[idx] = 180 + Math.round((255 - 180) * s / 32);
+      html += `<div style="background:rgb(${c[0]},${c[1]},${c[2]})"></div>`;
+    }
+    el.innerHTML = html;
+  };
+  sweep(document.getElementById("sr"), 0);
+  sweep(document.getElementById("sg"), 1);
+  sweep(document.getElementById("sb"), 2);
+</script>
+
+</body>
+</html>

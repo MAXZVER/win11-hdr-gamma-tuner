@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Тест потолка белого</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden;background:#000}
+  canvas{display:block}
+  #hud{
+    position:fixed;left:1.5rem;bottom:1.5rem;
+    font:400 .72rem/1.7 ui-monospace,"Cascadia Mono",Consolas,monospace;
+    color:#3a3a3a;letter-spacing:.03em;
+    background:rgba(255,255,255,.55);padding:.6rem .9rem;border-radius:3px;
+    max-width:44ch;pointer-events:none
+  }
+  #hud.dark{color:#5a5a5a;background:rgba(0,0,0,.55)}
+  #hud b{font-weight:600;color:#111}
+  #hud.dark b{color:#c8c8c8}
+  #hud .k{color:#7a7a7a}
+  #hud.dark .k{color:#454545}
+  #hud.off{display:none}
+  #settle{margin-top:.35rem}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="hud">
+  <div><b id="pair"></b> <span id="geom"></span></div>
+  <div id="settle"></div>
+  <div class="k">↑↓ нижний код &nbsp; ←→ ширина полос &nbsp; 1–6 пары &nbsp; D тени &nbsp; O ориентация &nbsp; H скрыть</div>
+</div>
+
+<script>
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d', { alpha: false });
+const hud = document.getElementById('hud');
+
+let hi = 255, lo = 250, w = 4, vertical = true, dark = false;
+let t0 = performance.now();
+
+const PRESETS = [[255,254],[255,252],[255,250],[255,245],[250,245],[245,240]];
+const DARK_PRESETS = [[4,0],[6,3],[8,5],[12,8],[16,12],[24,18]];
+
+function draw() {
+  const dpr = window.devicePixelRatio || 1;
+  const cw = Math.round(innerWidth * dpr);
+  const ch = Math.round(innerHeight * dpr);
+  cv.width = cw; cv.height = ch;
+  cv.style.width = innerWidth + 'px';
+  cv.style.height = innerHeight + 'px';
+
+  ctx.fillStyle = `rgb(${hi},${hi},${hi})`;
+  ctx.fillRect(0, 0, cw, ch);
+  ctx.fillStyle = `rgb(${lo},${lo},${lo})`;
+  if (vertical) for (let x = w; x < cw; x += 2 * w) ctx.fillRect(x, 0, w, ch);
+  else          for (let y = w; y < ch; y += 2 * w) ctx.fillRect(0, y, cw, y + w > ch ? ch - y : w);
+
+  hud.classList.toggle('dark', hi < 128);
+  document.getElementById('pair').textContent = `${hi} / ${lo}`;
+  document.getElementById('geom').textContent =
+    `· ${w}px · ${vertical ? 'вертикальные' : 'горизонтальные'} · dpr ${dpr}`;
+}
+
+function tick() {
+  const s = Math.floor((performance.now() - t0) / 1000);
+  document.getElementById('settle').innerHTML = s < 30
+    ? `<span class="k">подсветка устаканивается — ${30 - s} с</span>`
+    : `<span class="k">можно смотреть (${s} с)</span>`;
+  requestAnimationFrame(tick);
+}
+
+function set(h, l) { hi = h; lo = l; t0 = performance.now(); draw(); }
+
+addEventListener('keydown', e => {
+  const k = e.key;
+  if (k === 'ArrowUp')    set(hi, Math.min(hi - 1, lo + 1));
+  else if (k === 'ArrowDown') set(hi, Math.max(0, lo - 1));
+  else if (k === 'ArrowRight') { w = Math.min(32, w * 2); t0 = performance.now(); draw(); }
+  else if (k === 'ArrowLeft')  { w = Math.max(1, w / 2);  t0 = performance.now(); draw(); }
+  else if (k >= '1' && k <= '6') { const p = (dark ? DARK_PRESETS : PRESETS)[+k - 1]; set(p[0], p[1]); }
+  else if (k === 'd' || k === 'D' || k === 'в' || k === 'В') { dark = !dark; const p = (dark ? DARK_PRESETS : PRESETS)[2]; set(p[0], p[1]); }
+  else if (k === 'o' || k === 'O' || k === 'щ' || k === 'Щ') { vertical = !vertical; t0 = performance.now(); draw(); }
+  else if (k === 'h' || k === 'H' || k === 'р' || k === 'Р') hud.classList.toggle('off');
+  else if (k === 'f' || k === 'F' || k === 'а' || k === 'А') {
+    document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  } else return;
+  e.preventDefault();
+});
+
+addEventListener('resize', draw);
+draw(); tick();
+</script>
+</body>
+</html>

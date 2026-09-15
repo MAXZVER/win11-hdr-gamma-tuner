@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Тест полосения</title>
+<style>
+  :root{
+    --ink:#8a8a8a;
+    --ink-dim:#4a4a4a;
+    --rule:#242424;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#000;color:var(--ink);font-family:var(--mono)}
+  body{padding:0 0 4rem}
+
+  header{padding:2.25rem 2rem 1.1rem;border-bottom:1px solid var(--rule)}
+  h1{font-size:.8rem;font-weight:500;letter-spacing:.18em;text-transform:uppercase}
+  header p{margin-top:.6rem;font-size:.72rem;line-height:1.7;color:var(--ink-dim);max-width:70ch}
+
+  section{padding:1.5rem 2rem;border-bottom:1px solid var(--rule)}
+  h2{font-size:.68rem;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
+  .note{margin-top:.4rem;font-size:.68rem;line-height:1.6;color:var(--ink-dim);max-width:74ch}
+  canvas{display:block;width:100%;height:8vh;min-height:58px;margin-top:.9rem}
+  .scale{display:flex;justify-content:space-between;font-size:.58rem;color:var(--ink-dim);margin-top:.3rem}
+  kbd{color:var(--ink);font-family:var(--mono)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Тест полосения</h1>
+  <p>Открой на весь экран (<kbd>F11</kbd>), масштаб браузера 100%. Каждая полоса —
+     узкий диапазон кодов, растянутый на всю ширину экрана: так квантование видно
+     во много раз лучше, чем на обычном градиенте. Рисуется по пикселям через canvas,
+     без сглаживания и дизера браузера.</p>
+  <p>Ищи вертикальные ступени и участки, где переход идёт рывками вместо ровного
+     нарастания. Тени — первое место, где полосение проявляется.</p>
+</header>
+
+<section>
+  <h2>1 · Глубокие тени · коды 0–32</h2>
+  <p class="note">Самый чувствительный диапазон. Здесь кривая сжимает сильнее всего,
+     и если запаса кодов не хватает — видно именно тут.</p>
+  <canvas data-from="0" data-to="32"></canvas>
+  <div class="scale"><span>0</span><span>8</span><span>16</span><span>24</span><span>32</span></div>
+</section>
+
+<section>
+  <h2>2 · Тени · коды 32–72</h2>
+  <p class="note">Диапазон тёмного интерфейса: фоны панелей, разделители, подложки.</p>
+  <canvas data-from="32" data-to="72"></canvas>
+  <div class="scale"><span>32</span><span>42</span><span>52</span><span>62</span><span>72</span></div>
+</section>
+
+<section>
+  <h2>3 · Середина · коды 96–160</h2>
+  <p class="note">Здесь полосение маловероятно, но проверить стоит: если оно есть
+     и тут, дело не в сжатии, а в разрядности вывода.</p>
+  <canvas data-from="96" data-to="160"></canvas>
+  <div class="scale"><span>96</span><span>112</span><span>128</span><span>144</span><span>160</span></div>
+</section>
+
+<section>
+  <h2>4 · Света · коды 208–255</h2>
+  <p class="note">Верх шкалы. Ступени должны идти ровно до самого края.</p>
+  <canvas data-from="208" data-to="255"></canvas>
+  <div class="scale"><span>208</span><span>220</span><span>232</span><span>244</span><span>255</span></div>
+</section>
+
+<section>
+  <h2>5 · Полный ход · коды 0–255</h2>
+  <p class="note">Контрольный. Резкий перелом яркости где-то посередине означал бы
+     излом в кривой, а не квантование.</p>
+  <canvas data-from="0" data-to="255"></canvas>
+  <div class="scale"><span>0</span><span>64</span><span>128</span><span>192</span><span>255</span></div>
+</section>
+
+<script>
+  const paint = (cv) => {
+    const from = +cv.dataset.from;
+    const to   = +cv.dataset.to;
+    const dpr  = window.devicePixelRatio || 1;
+    const cw   = Math.max(1, Math.round(cv.clientWidth  * dpr));
+    const ch   = Math.max(1, Math.round(cv.clientHeight * dpr));
+    cv.width = cw; cv.height = ch;
+
+    const ctx = cv.getContext('2d', { alpha: false });
+    // ступень на пиксель: значение округляется вниз, поэтому одинаковые коды
+    // дают одинаковые полосы — ровно то, что мы и хотим увидеть
+    for (let x = 0; x < cw; x++) {
+      const v = Math.round(from + (to - from) * x / (cw - 1));
+      ctx.fillStyle = `rgb(${v},${v},${v})`;
+      ctx.fillRect(x, 0, 1, ch);
+    }
+  };
+
+  const all = () => document.querySelectorAll('canvas').forEach(paint);
+  all();
+  addEventListener('resize', all);
+</script>
+
+</body>
+</html>

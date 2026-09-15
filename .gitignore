@@ -1,0 +1,38 @@
+# Сторонний бинарник из ArgyllCMS (AGPL3/GPL2+). Скачивается отдельно,
+# см. README. В репозиторий не кладём: чужая лицензия и 5 МБ веса.
+dispwin.exe
+
+# Результаты сборки
+DisplayTuner.exe
+Display-Tuner.ico
+*.lnk
+
+# Кривые генерируются на месте из LutGen.ps1
+*.cal
+current.cal
+
+# Личные настройки и рабочие файлы
+tuner-settings.json
+sensor-*.json
+u4025qw-calibration.zip
+icon-preview*.png
+
+# Мусор ОС и редакторов
+Thumbs.db
+desktop.ini
+.vs/
+*.user
+*.suo
+__pycache__/
+*.pyc
+
+# Наследство первой версии: сломанные кривые и ведущие на них батники,
+# ICC-профили от заброшенной ветки, питоновские генераторы, заменённые
+# на LutGen.ps1. Файлы оставлены на диске, но в репозитории им не место.
+revert.bat
+srgb-to-gamma.bat
+hdr-gamma*.icm
+gen.py
+gen_pq.py
+lut.cal
+lut - Copy.cal
