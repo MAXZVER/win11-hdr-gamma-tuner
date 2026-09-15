@@ -61,10 +61,18 @@ static class Host
             using (PowerShell ps = PowerShell.Create())
             {
                 ps.AddCommand(script);
-                foreach (string a in args)
+                // -Tray (переключатель) и -Lang en (параметр со значением)
+                for (int i = 0; i < args.Length; i++)
                 {
-                    // параметры-переключатели вида -Tray
-                    if (a.StartsWith("-") && a.Length > 1) ps.AddParameter(a.Substring(1));
+                    string a = args[i];
+                    if (!a.StartsWith("-") || a.Length < 2) continue;
+                    string name = a.Substring(1);
+                    if (i + 1 < args.Length && !args[i + 1].StartsWith("-"))
+                    {
+                        ps.AddParameter(name, args[i + 1]);
+                        i++;
+                    }
+                    else ps.AddParameter(name);
                 }
                 ps.Invoke();
 

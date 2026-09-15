@@ -1,25 +1,29 @@
 ﻿<#
-    Display-Tuner.ps1 - настройка яркости и гаммы Dell U4025QW.
+    Display-Tuner.ps1 - brightness and gamma for Windows 11 HDR mode.
 
-        Display-Tuner.bat            открыть окно
-        Display-Tuner.ps1 -Tray      запуск в фоне, значок в трее (автозагрузка)
-        Display-Tuner.ps1 -Apply     применить сохранённое и выйти
+        DisplayTuner.exe             open the window
+        DisplayTuner.exe -Tray       background, tray icon only (autostart uses this)
+        DisplayTuner.exe -Apply      apply saved settings and exit
+        DisplayTuner.exe -Lang en    force a language (en / ru)
 
-    Почему не служба: службы работают в нулевой сессии и значок в трее показать
-    не могут. Нужен обычный процесс пользователя, стартующий при входе, - это
-    и есть режим -Tray.
+    Not a Windows service on purpose: services run in session 0 and cannot show
+    a tray icon. What is needed is an ordinary user process started at logon -
+    that is the -Tray mode.
 
-    Слайдер «Яркость контента SDR» в Windows ставится один раз на 43% и не
-    трогается. Яркость задаётся кривой: она отображает SDR-белый с 252 нит
-    на выбранное значение. Программного доступа к слайдеру Windows не даёт.
+    The Windows "SDR content brightness" slider is set once to 43% and never
+    touched again. Brightness lives in the curve, which maps SDR white from
+    252 nits down to whatever is selected. Windows exposes no API for that
+    slider, which is why it is frozen.
 
-    Кривая пишется в current.cal и перезаписывается, чтобы не плодить файлы.
+    The curve is written to current.cal and overwritten each time, so the
+    folder does not fill up with files.
 #>
 
 [CmdletBinding()]
 param(
     [switch]$Apply,
-    [switch]$Tray
+    [switch]$Tray,
+    [ValidateSet('auto', 'en', 'ru')][string]$Lang = 'auto'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,52 +36,156 @@ $CurrentLut   = Join-Path $Root 'current.cal'
 $SettingsFile = Join-Path $Root 'tuner-settings.json'
 $IconFile     = Join-Path $Root 'Display-Tuner.ico'
 
-$SliderNits = 252     # на сколько выставлен слайдер Windows (43%)
+$SliderNits = 252     # where the Windows slider is parked (43%)
+$SliderPct  = [int](($SliderNits - 80) / 4)
 $MinNits    = 80
 $MaxNits    = 252
 
-if (-not (Test-Path $Dispwin)) { throw "dispwin.exe не найден: $Root" }
+# profile keys are stable; only the labels are translated
+$PresetKeys = @('day', 'evening', 'night')
 
-# ------------------------------------------------------------------ настройки
+if (-not (Test-Path $Dispwin)) {
+    throw "dispwin.exe not found in $Root. Get ArgyllCMS from https://www.argyllcms.com/downloadwin.html"
+}
+
+# ------------------------------------------------------------------ strings
+$Strings = @{
+    en = @{
+        Title        = 'Display Tuner'
+        SliderHint   = 'Windows SDR slider: {0}%, leave it alone'
+        Brightness   = 'Brightness'
+        Gamma        = 'Gamma'
+        Profiles     = 'Profiles'
+        SaveHere     = 'Save here'
+        GameMode     = 'Game mode'
+        RestoreCurve = 'Restore correction'
+        GameHint     = 'Game mode drops the curve: it crushes native HDR in games'
+        Tests        = 'Tests'
+        ToTray       = 'To tray'
+        Nits         = '{0} nits'
+        StateOn      = '{0} nits  -  gamma {1}'
+        StateOff     = 'game mode'
+        TrayOn       = 'Brightness: {0} nits, gamma {1}'
+        TrayOff      = 'Game mode: curve removed'
+        Ready        = 'ready'
+        Applying     = 'applying...'
+        Applied      = 'applied: {0} nits, gamma {1}'
+        Cleared      = 'curve removed - native HDR in games is untouched'
+        ProfileSet   = 'profile "{0}"'
+        ProfileSaved = 'profile "{0}" overwritten'
+        Error        = 'error: {0}'
+        ShowWindow   = 'Show window'
+        GameToggle   = 'Game mode (drop the curve)'
+        Quit         = 'Quit'
+        Day          = 'Day'
+        Evening      = 'Evening'
+        Night        = 'Night'
+        TestShadow   = 'Shadows (gray-test)'
+        TestBand     = 'Banding (band-test)'
+        TestColor    = 'Colour (color-test)'
+        TestClip     = 'White ceiling (clip-test)'
+    }
+    ru = @{
+        Title        = 'Яркость дисплея'
+        SliderHint   = 'слайдер SDR в Windows: {0}%, не менять'
+        Brightness   = 'Яркость'
+        Gamma        = 'Гамма'
+        Profiles     = 'Профили'
+        SaveHere     = 'Записать сюда'
+        GameMode     = 'Игровой режим'
+        RestoreCurve = 'Вернуть коррекцию'
+        GameHint     = 'Игровой режим снимает кривую: она давит нативный HDR в играх'
+        Tests        = 'Тесты'
+        ToTray       = 'В трей'
+        Nits         = '{0} нит'
+        StateOn      = '{0} нит  ·  гамма {1}'
+        StateOff     = 'игровой режим'
+        TrayOn       = 'Яркость: {0} нит, гамма {1}'
+        TrayOff      = 'Игровой режим: кривая снята'
+        Ready        = 'готов'
+        Applying     = 'применяю...'
+        Applied      = 'применено: {0} нит, гамма {1}'
+        Cleared      = 'кривая снята — нативный HDR в играх не давится'
+        ProfileSet   = 'профиль «{0}»'
+        ProfileSaved = 'профиль «{0}» перезаписан'
+        Error        = 'ошибка: {0}'
+        ShowWindow   = 'Показать окно'
+        GameToggle   = 'Игровой режим (снять кривую)'
+        Quit         = 'Выход'
+        Day          = 'День'
+        Evening      = 'Вечер'
+        Night        = 'Ночь'
+        TestShadow   = 'Тени (gray-test)'
+        TestBand     = 'Полосение (band-test)'
+        TestColor    = 'Цвет (color-test)'
+        TestClip     = 'Потолок белого (clip-test)'
+    }
+}
+
+# ------------------------------------------------------------------ settings
 function Get-DefaultSettings {
     return [ordered]@{
         White   = 140
         Gamma   = 2.6
         Enabled = $true
+        Lang    = 'auto'
         Presets = [ordered]@{
-            'День'  = [ordered]@{ White = 220; Gamma = 2.2 }
-            'Вечер' = [ordered]@{ White = 140; Gamma = 2.6 }
-            'Ночь'  = [ordered]@{ White = 100; Gamma = 2.4 }
+            day     = [ordered]@{ White = 220; Gamma = 2.2 }
+            evening = [ordered]@{ White = 140; Gamma = 2.6 }
+            night   = [ordered]@{ White = 100; Gamma = 2.4 }
         }
     }
 }
 
 function Read-Settings {
-    if (-not (Test-Path $SettingsFile)) { return Get-DefaultSettings }
+    $s = Get-DefaultSettings
+    if (-not (Test-Path $SettingsFile)) { return $s }
     try {
         $j = Get-Content $SettingsFile -Raw -Encoding UTF8 | ConvertFrom-Json
-        $s = Get-DefaultSettings
         if ($null -ne $j.White)   { $s.White   = [int]$j.White }
         if ($null -ne $j.Gamma)   { $s.Gamma   = [double]$j.Gamma }
         if ($null -ne $j.Enabled) { $s.Enabled = [bool]$j.Enabled }
+        if ($null -ne $j.Lang)    { $s.Lang    = [string]$j.Lang }
         if ($null -ne $j.Presets) {
-            foreach ($name in @($s.Presets.Keys)) {
-                $p = $j.Presets.$name
-                if ($null -ne $p) {
-                    $s.Presets[$name].White = [int]$p.White
-                    $s.Presets[$name].Gamma = [double]$p.Gamma
+            # старые файлы держали профили под русскими именами
+            $legacy = @{ day = 'День'; evening = 'Вечер'; night = 'Ночь' }
+            foreach ($k in $PresetKeys) {
+                $p = $j.Presets.$k
+                if ($null -eq $p) { $p = $j.Presets.($legacy[$k]) }
+                if ($null -ne $p -and $null -ne $p.White) {
+                    $s.Presets[$k].White = [int]$p.White
+                    $s.Presets[$k].Gamma = [double]$p.Gamma
                 }
             }
         }
-        return $s
-    } catch { return Get-DefaultSettings }
+    } catch { }
+    return $s
 }
 
 function Write-Settings($s) {
     try { $s | ConvertTo-Json -Depth 5 | Set-Content -Path $SettingsFile -Encoding UTF8 } catch { }
 }
 
-# ------------------------------------------------------------------ применение
+$settings = Read-Settings
+
+# язык: ключ запуска важнее файла, файл важнее системы
+$pick = if ($Lang -ne 'auto') { $Lang }
+        elseif ($settings.Lang -and $settings.Lang -ne 'auto') { $settings.Lang }
+        elseif ((Get-Culture).TwoLetterISOLanguageName -eq 'ru') { 'ru' }
+        else { 'en' }
+$T = $Strings[$pick]
+if (-not $T) { $T = $Strings['en'] }
+
+function Get-PresetLabel([string]$Key) {
+    switch ($Key) {
+        'day'     { return $T.Day }
+        'evening' { return $T.Evening }
+        'night'   { return $T.Night }
+        default   { return $Key }
+    }
+}
+
+# ------------------------------------------------------------------ applying
 function Invoke-Curve([int]$White, [double]$Gamma) {
     New-Lut -SliderNits $SliderNits -WhiteNits $White -Gamma $Gamma -Path $CurrentLut
     & $Dispwin $CurrentLut | Out-Null
@@ -89,42 +197,25 @@ function Clear-Curve {
     return ($LASTEXITCODE -eq 0)
 }
 
-$settings = Read-Settings
-
-# --- применить и выйти -------------------------------------------------------
 if ($Apply -and -not $Tray) {
     if ($settings.Enabled) { [void](Invoke-Curve ([int]$settings.White) ([double]$settings.Gamma)) }
     else { [void](Clear-Curve) }
     exit
 }
 
-# Один экземпляр на пользователя: приложение стартует при входе и живёт в трее,
-# второй запуск должен просто показать уже работающее окно, а не поднять копию.
-$mutexName = 'Local\DisplayTuner_' + $env:USERNAME
-$script:Mutex = New-Object System.Threading.Mutex($true, $mutexName, [ref]$null)
-if (-not $script:Mutex.WaitOne(0)) {
-    # уже запущено - будим то окно и выходим
-    Add-Type -TypeDefinition @"
-using System; using System.Runtime.InteropServices;
-public class Waker {
-  [DllImport("user32.dll")] public static extern int RegisterWindowMessage(string s);
-  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, int m, IntPtr w, IntPtr l);
-  public static readonly IntPtr HWND_BROADCAST = (IntPtr)0xffff;
-}
-"@
-    $msg = [Waker]::RegisterWindowMessage('DisplayTunerShow')
-    [void][Waker]::PostMessage([Waker]::HWND_BROADCAST, $msg, [IntPtr]::Zero, [IntPtr]::Zero)
-    exit
-}
-
-# ---------------------------------------------------------------------- окно
+# -------------------------------------------------------------------- window
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-# Процесс запускается с -WindowStyle Hidden, чтобы не мелькала консоль. Побочный
-# эффект: первое окно процесса наследует флаг «скрыто» из startup info и само
-# не показывается. Поэтому поднимаем его через ShowWindow явно.
+# Один экземпляр на пользователя: приложение стартует при входе и живёт в трее,
+# второй запуск должен просто показать уже работающее окно, а не поднять копию.
+$mutexName = 'Local\DisplayTuner_' + $env:USERNAME
+$script:Mutex = New-Object System.Threading.Mutex($true, $mutexName, [ref]$null)
+if (-not $script:Mutex.WaitOne(0)) { exit }
+
+# Процесс запускается скрытым, чтобы не мелькала консоль. Побочный эффект:
+# первое окно наследует флаг «скрыто» из startup info и само не показывается.
 if (-not ('Win32Show' -as [type])) {
 Add-Type -TypeDefinition @"
 using System; using System.Runtime.InteropServices;
@@ -135,14 +226,11 @@ public class Win32Show {
 "@
 }
 
-$appIcon = if (Test-Path $IconFile) {
-    New-Object System.Drawing.Icon $IconFile
-} else {
-    [System.Drawing.SystemIcons]::Application
-}
+$appIcon = if (Test-Path $IconFile) { New-Object System.Drawing.Icon $IconFile }
+           else { [System.Drawing.SystemIcons]::Application }
 
 $form                 = New-Object System.Windows.Forms.Form
-$form.Text            = 'Яркость дисплея'
+$form.Text            = $T.Title
 $form.Size            = New-Object System.Drawing.Size(460, 450)
 $form.StartPosition   = 'CenterScreen'
 $form.FormBorderStyle = 'FixedSingle'
@@ -152,13 +240,13 @@ $form.Icon            = $appIcon
 $form.BackColor       = [System.Drawing.Color]::FromArgb(250, 250, 250)
 $form.ShowInTaskbar   = -not $Tray
 
-function New-Label([string]$Text, [int]$X, [int]$Y, [int]$W, [int]$H, [int]$Size, [bool]$Bold, $Color) {
+function New-Label([string]$Text, [int]$X, [int]$Y, [int]$W, [int]$H, [double]$Size, [bool]$Bold, $Color) {
     $l = New-Object System.Windows.Forms.Label
     $l.Text = $Text
     $l.Location = New-Object System.Drawing.Point($X, $Y)
     $l.Size = New-Object System.Drawing.Size($W, $H)
     $style = if ($Bold) { [System.Drawing.FontStyle]::Bold } else { [System.Drawing.FontStyle]::Regular }
-    $l.Font = New-Object System.Drawing.Font('Segoe UI', $Size, $style)
+    $l.Font = New-Object System.Drawing.Font('Segoe UI', [single]$Size, $style)
     if ($Color) { $l.ForeColor = $Color }
     $form.Controls.Add($l)
     return $l
@@ -167,10 +255,10 @@ function New-Label([string]$Text, [int]$X, [int]$Y, [int]$W, [int]$H, [int]$Size
 $dim = [System.Drawing.Color]::FromArgb(120, 120, 120)
 
 $lblState = New-Label '' 20 16 400 30 15 $true $null
-$lblHint  = New-Label 'слайдер SDR в Windows: 43%, не менять' 20 46 400 18 8 $false $dim
+[void](New-Label ($T.SliderHint -f $SliderPct) 20 46 400 18 8 $false $dim)
 
-[void](New-Label 'Яркость' 20 82 100 18 9 $false $dim)
-$lblWhite = New-Label '' 320 82 100 18 9 $true $null
+[void](New-Label $T.Brightness 20 82 180 18 9 $false $dim)
+$lblWhite = New-Label '' 300 82 120 18 9 $true $null
 $lblWhite.TextAlign = 'MiddleRight'
 
 $trkWhite = New-Object System.Windows.Forms.TrackBar
@@ -184,14 +272,14 @@ $trkWhite.LargeChange = 10
 $trkWhite.Value = [math]::Max($MinNits, [math]::Min($MaxNits, [int]$settings.White))
 $form.Controls.Add($trkWhite)
 
-[void](New-Label 'Гамма' 20 156 100 18 9 $false $dim)
-$lblGamma = New-Label '' 320 156 100 18 9 $true $null
+[void](New-Label $T.Gamma 20 156 180 18 9 $false $dim)
+$lblGamma = New-Label '' 300 156 120 18 9 $true $null
 $lblGamma.TextAlign = 'MiddleRight'
 
 $trkGamma = New-Object System.Windows.Forms.TrackBar
 $trkGamma.Location = New-Object System.Drawing.Point(18, 176)
 $trkGamma.Size = New-Object System.Drawing.Size(404, 45)
-$trkGamma.Minimum = 18      # 1.8, шаг 0.1
+$trkGamma.Minimum = 18      # 1.8, step 0.1
 $trkGamma.Maximum = 32      # 3.2
 $trkGamma.TickFrequency = 2
 $trkGamma.SmallChange = 1
@@ -199,24 +287,24 @@ $trkGamma.LargeChange = 2
 $trkGamma.Value = [math]::Max(18, [math]::Min(32, [int][math]::Round([double]$settings.Gamma * 10)))
 $form.Controls.Add($trkGamma)
 
-[void](New-Label 'Профили' 20 230 200 18 9 $false $dim)
+[void](New-Label $T.Profiles 20 230 200 18 9 $false $dim)
 
 $presetButtons = @{}
 $px = 18
-foreach ($name in @($settings.Presets.Keys)) {
+foreach ($key in $PresetKeys) {
     $b = New-Object System.Windows.Forms.Button
-    $b.Text = $name
+    $b.Text = [string](Get-PresetLabel $key)
     $b.Size = New-Object System.Drawing.Size(96, 32)
     $b.Location = New-Object System.Drawing.Point($px, 250)
     $b.FlatStyle = 'System'
-    $b.Tag = $name
+    $b.Tag = $key
     $form.Controls.Add($b)
-    $presetButtons[$name] = $b
+    $presetButtons[$key] = $b
     $px += 102
 }
 
 $btnSave = New-Object System.Windows.Forms.Button
-$btnSave.Text = 'Записать сюда'
+$btnSave.Text = $T.SaveHere
 $btnSave.Size = New-Object System.Drawing.Size(110, 32)
 $btnSave.Location = New-Object System.Drawing.Point(312, 250)
 $btnSave.FlatStyle = 'System'
@@ -230,41 +318,41 @@ $btnToggle.Font = New-Object System.Drawing.Font('Segoe UI', 10)
 $form.Controls.Add($btnToggle)
 
 $btnTests = New-Object System.Windows.Forms.Button
-$btnTests.Text = 'Тесты'
+$btnTests.Text = $T.Tests
 $btnTests.Size = New-Object System.Drawing.Size(96, 38)
 $btnTests.Location = New-Object System.Drawing.Point(224, 298)
 $btnTests.FlatStyle = 'System'
 $form.Controls.Add($btnTests)
 
 $btnHide = New-Object System.Windows.Forms.Button
-$btnHide.Text = 'В трей'
+$btnHide.Text = $T.ToTray
 $btnHide.Size = New-Object System.Drawing.Size(96, 38)
 $btnHide.Location = New-Object System.Drawing.Point(326, 298)
 $btnHide.FlatStyle = 'System'
 $form.Controls.Add($btnHide)
 
-$lblGameHint = New-Label 'Игровой режим снимает кривую: она давит нативный HDR в играх' 20 340 400 16 8 $false $dim
-$lblStatus = New-Label '' 20 358 400 18 8 $false $dim
+[void](New-Label $T.GameHint 20 340 410 16 8 $false $dim)
+$lblStatus = New-Label '' 20 358 410 18 8 $false $dim
 
 $testMenu = New-Object System.Windows.Forms.ContextMenuStrip
 foreach ($t in @(
-    @{ T = 'Тени (gray-test)';           F = 'gray-test.html'  },
-    @{ T = 'Полосение (band-test)';      F = 'band-test.html'  },
-    @{ T = 'Цвет (color-test)';          F = 'color-test.html' },
-    @{ T = 'Потолок белого (clip-test)'; F = 'clip-test.html'  })) {
-    $item = $testMenu.Items.Add($t.T)
+    @{ T = $T.TestShadow; F = 'gray-test.html'  },
+    @{ T = $T.TestBand;   F = 'band-test.html'  },
+    @{ T = $T.TestColor;  F = 'color-test.html' },
+    @{ T = $T.TestClip;   F = 'clip-test.html'  })) {
+    $item = $testMenu.Items.Add([string]$t.T)
     $item.Tag = $t.F
     $item.Add_Click({ Start-Process (Join-Path $Root $this.Tag) })
 }
 
 $trayIcon = New-Object System.Windows.Forms.NotifyIcon
 $trayIcon.Icon = $appIcon
-$trayIcon.Text = 'Яркость дисплея'
+$trayIcon.Text = $T.Title
 $trayIcon.Visible = $true
 $trayMenu = New-Object System.Windows.Forms.ContextMenuStrip
 $trayIcon.ContextMenuStrip = $trayMenu
 
-# ------------------------------------------------------------------- поведение
+# ------------------------------------------------------------------ behaviour
 $script:White    = [int]$trkWhite.Value
 $script:Gamma    = [double]$trkGamma.Value / 10
 $script:Enabled  = [bool]$settings.Enabled
@@ -275,43 +363,46 @@ function Save-Now {
     $settings.White   = $script:White
     $settings.Gamma   = $script:Gamma
     $settings.Enabled = $script:Enabled
+    $settings.Lang    = $pick
     Write-Settings $settings
 }
 
 function Update-Labels {
-    $lblWhite.Text = "$($script:White) нит"
-    $lblGamma.Text = $script:Gamma.ToString('0.0')
+    $gs = $script:Gamma.ToString('0.0', [System.Globalization.CultureInfo]::InvariantCulture)
+    $lblWhite.Text = $T.Nits -f $script:White
+    $lblGamma.Text = $gs
     if ($script:Enabled) {
-        $lblState.Text = "$($script:White) нит  ·  гамма $($script:Gamma.ToString('0.0'))"
-        $btnToggle.Text = 'Игровой режим'
-        $trayIcon.Text = "Яркость: $($script:White) нит, гамма $($script:Gamma.ToString('0.0'))"
-        if ($itToggle) { $itToggle.Text = 'Игровой режим (снять кривую)' }
+        $lblState.Text  = $T.StateOn -f $script:White, $gs
+        $btnToggle.Text = $T.GameMode
+        $trayIcon.Text  = $T.TrayOn -f $script:White, $gs
+        if ($itToggle) { $itToggle.Text = $T.GameToggle }
     } else {
-        $lblState.Text = 'игровой режим'
-        $btnToggle.Text = 'Вернуть коррекцию'
-        $trayIcon.Text = 'Игровой режим: кривая снята'
-        if ($itToggle) { $itToggle.Text = 'Вернуть коррекцию' }
+        $lblState.Text  = $T.StateOff
+        $btnToggle.Text = $T.RestoreCurve
+        $trayIcon.Text  = $T.TrayOff
+        if ($itToggle) { $itToggle.Text = $T.RestoreCurve }
     }
 }
 
 function Invoke-Now {
+    $gs = $script:Gamma.ToString('0.0', [System.Globalization.CultureInfo]::InvariantCulture)
     try {
         if ($script:Enabled) {
             [void](Invoke-Curve $script:White $script:Gamma)
-            $lblStatus.Text = "применено: $($script:White) нит, гамма $($script:Gamma.ToString('0.0'))"
+            $lblStatus.Text = $T.Applied -f $script:White, $gs
         } else {
             [void](Clear-Curve)
-            $lblStatus.Text = 'кривая снята — нативный HDR в играх не давится'
+            $lblStatus.Text = $T.Cleared
         }
     } catch {
-        $lblStatus.Text = 'ошибка: ' + $_.Exception.Message
+        $lblStatus.Text = $T.Error -f $_.Exception.Message
     }
     Update-Labels
     Save-Now
 }
 
-function Set-Preset([string]$Name) {
-    $p = $settings.Presets[$Name]
+function Set-Preset([string]$Key) {
+    $p = $settings.Presets[$Key]
     if ($null -eq $p) { return }
     $script:White = [int]$p.White
     $script:Gamma = [double]$p.Gamma
@@ -319,13 +410,13 @@ function Set-Preset([string]$Name) {
     $trkWhite.Value = $script:White
     $trkGamma.Value = [int][math]::Round($script:Gamma * 10)
     Invoke-Now
-    $lblStatus.Text = "профиль «$Name»"
+    $lblStatus.Text = $T.ProfileSet -f (Get-PresetLabel $Key)
 }
 
 function Show-MainWindow {
     $form.Show()
     $form.WindowState = 'Normal'
-    [void][Win32Show]::ShowWindow($form.Handle, 5)     # SW_SHOW
+    [void][Win32Show]::ShowWindow($form.Handle, 5)
     [void][Win32Show]::SetForegroundWindow($form.Handle)
     $form.Activate()
 }
@@ -336,7 +427,7 @@ function Stop-App {
     [System.Windows.Forms.Application]::Exit()
 }
 
-# генерация кривой ~120 мс: за живым перетаскиванием не успеет, поэтому ждём паузы
+# генерация кривой ~120 мс: за живым перетаскиванием не успеет, ждём паузы
 $debounce = New-Object System.Windows.Forms.Timer
 $debounce.Interval = 150
 $debounce.Add_Tick({ $debounce.Stop(); Invoke-Now })
@@ -344,7 +435,7 @@ $debounce.Add_Tick({ $debounce.Stop(); Invoke-Now })
 function Request-Apply {
     $debounce.Stop()
     Update-Labels
-    $lblStatus.Text = 'применяю...'
+    $lblStatus.Text = $T.Applying
     $debounce.Start()
 }
 
@@ -355,40 +446,39 @@ $btnToggle.Add_Click({ $script:Enabled = -not $script:Enabled; Invoke-Now })
 $btnTests.Add_Click({ $testMenu.Show($btnTests, 0, $btnTests.Height) })
 $btnHide.Add_Click({ $form.Hide() })
 
-foreach ($name in @($presetButtons.Keys)) {
-    $presetButtons[$name].Add_Click({ Set-Preset $this.Tag })
+foreach ($key in $PresetKeys) {
+    $presetButtons[$key].Add_Click({ Set-Preset $this.Tag })
 }
 
 $btnSave.Add_Click({
     $menu = New-Object System.Windows.Forms.ContextMenuStrip
-    foreach ($name in @($settings.Presets.Keys)) {
-        $it = $menu.Items.Add($name)
-        $it.Tag = $name
+    foreach ($key in $PresetKeys) {
+        $it = $menu.Items.Add([string](Get-PresetLabel $key))
+        $it.Tag = $key
         $it.Add_Click({
             $settings.Presets[$this.Tag].White = $script:White
             $settings.Presets[$this.Tag].Gamma = $script:Gamma
             Write-Settings $settings
-            $lblStatus.Text = "профиль «$($this.Tag)» перезаписан"
+            $lblStatus.Text = $T.ProfileSaved -f (Get-PresetLabel $this.Tag)
         })
     }
     $menu.Show($btnSave, 0, $btnSave.Height)
 })
 
-# --- меню трея ---
-$itShow = $trayMenu.Items.Add('Показать окно')
+$itShow = $trayMenu.Items.Add([string]$T.ShowWindow)
 $itShow.Font = New-Object System.Drawing.Font($trayMenu.Font, [System.Drawing.FontStyle]::Bold)
 $itShow.Add_Click({ Show-MainWindow })
 [void]$trayMenu.Items.Add('-')
-foreach ($name in @($settings.Presets.Keys)) {
-    $it = $trayMenu.Items.Add($name)
-    $it.Tag = $name
+foreach ($key in $PresetKeys) {
+    $it = $trayMenu.Items.Add([string](Get-PresetLabel $key))
+    $it.Tag = $key
     $it.Add_Click({ Set-Preset $this.Tag })
 }
 [void]$trayMenu.Items.Add('-')
-$itToggle = $trayMenu.Items.Add('Игровой режим (снять кривую)')
+$itToggle = $trayMenu.Items.Add([string]$T.GameToggle)
 $itToggle.Add_Click({ $script:Enabled = -not $script:Enabled; Invoke-Now })
 [void]$trayMenu.Items.Add('-')
-$itQuit = $trayMenu.Items.Add('Выход')
+$itQuit = $trayMenu.Items.Add([string]$T.Quit)
 $itQuit.Add_Click({ Stop-App })
 
 $trayIcon.Add_DoubleClick({ Show-MainWindow })
@@ -397,34 +487,24 @@ $trayIcon.Add_DoubleClick({ Show-MainWindow })
 $form.Add_Resize({ if ($form.WindowState -eq 'Minimized') { $form.Hide() } })
 $form.Add_FormClosing({
     param($sender, $e)
-    if (-not $script:Quitting) {
-        $e.Cancel = $true
-        $form.Hide()
-    }
+    if (-not $script:Quitting) { $e.Cancel = $true; $form.Hide() }
 })
 
 Update-Labels
-
-# --------------------------------------------------------------------- запуск
-$lblStatus.Text = 'готов'
+$lblStatus.Text = $T.Ready
 
 if ($Tray) {
-    # фоновый режим: применяем сохранённое, окно не показываем.
-    # Run с пустым контекстом крутит цикл сообщений без единой формы -
-    # окно потом открывается из меню трея.
     Invoke-Now
-    $ctx = New-Object System.Windows.Forms.ApplicationContext
-    [System.Windows.Forms.Application]::Run($ctx)
 } else {
-    # окно поднимаем из таймера, уже внутри цикла сообщений: до его старта
-    # ShowWindow не срабатывает из-за флага «скрыто» у процесса
+    # окно поднимаем из таймера, уже внутри цикла сообщений
     $boot = New-Object System.Windows.Forms.Timer
     $boot.Interval = 60
     $boot.Add_Tick({ $boot.Stop(); Show-MainWindow })
     $boot.Start()
-    $ctx = New-Object System.Windows.Forms.ApplicationContext
-    [System.Windows.Forms.Application]::Run($ctx)
 }
+
+$ctx = New-Object System.Windows.Forms.ApplicationContext
+[System.Windows.Forms.Application]::Run($ctx)
 
 $trayIcon.Dispose()
 $form.Dispose()
