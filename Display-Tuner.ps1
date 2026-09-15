@@ -53,7 +53,7 @@ if (-not (Test-Path $Dispwin)) {
 $Strings = @{
     en = @{
         Title        = 'Display Tuner'
-        SliderHint   = 'Windows SDR slider: {0}%, leave it alone'
+        SliderHint   = 'Windows SDR slider is at {0}% - leave it alone'
         Brightness   = 'Brightness'
         Gamma        = 'Gamma'
         Profiles     = 'Profiles'
@@ -174,14 +174,14 @@ $pick = if ($Lang -ne 'auto') { $Lang }
         elseif ($settings.Lang -and $settings.Lang -ne 'auto') { $settings.Lang }
         elseif ((Get-Culture).TwoLetterISOLanguageName -eq 'ru') { 'ru' }
         else { 'en' }
-$T = $Strings[$pick]
-if (-not $T) { $T = $Strings['en'] }
+$Loc = $Strings[$pick]
+if (-not $Loc) { $Loc = $Strings['en'] }
 
 function Get-PresetLabel([string]$Key) {
     switch ($Key) {
-        'day'     { return $T.Day }
-        'evening' { return $T.Evening }
-        'night'   { return $T.Night }
+        'day'     { return $Loc.Day }
+        'evening' { return $Loc.Evening }
+        'night'   { return $Loc.Night }
         default   { return $Key }
     }
 }
@@ -233,7 +233,7 @@ $appIcon = if (Test-Path $IconFile) { New-Object System.Drawing.Icon $IconFile }
 $appIconOff = if (Test-Path $IconFileOff) { New-Object System.Drawing.Icon $IconFileOff } else { $appIcon }
 
 $form                 = New-Object System.Windows.Forms.Form
-$form.Text            = $T.Title
+$form.Text            = $Loc.Title
 $form.Size            = New-Object System.Drawing.Size(460, 450)
 $form.StartPosition   = 'CenterScreen'
 $form.FormBorderStyle = 'FixedSingle'
@@ -258,9 +258,9 @@ function New-Label([string]$Text, [int]$X, [int]$Y, [int]$W, [int]$H, [double]$S
 $dim = [System.Drawing.Color]::FromArgb(120, 120, 120)
 
 $lblState = New-Label '' 20 16 400 30 15 $true $null
-[void](New-Label ($T.SliderHint -f $SliderPct) 20 46 400 18 8 $false $dim)
+[void](New-Label ($Loc.SliderHint -f $SliderPct) 20 46 400 18 8 $false $dim)
 
-[void](New-Label $T.Brightness 20 82 180 18 9 $false $dim)
+[void](New-Label $Loc.Brightness 20 82 180 18 9 $false $dim)
 $lblWhite = New-Label '' 300 82 120 18 9 $true $null
 $lblWhite.TextAlign = 'MiddleRight'
 
@@ -275,7 +275,7 @@ $trkWhite.LargeChange = 10
 $trkWhite.Value = [math]::Max($MinNits, [math]::Min($MaxNits, [int]$settings.White))
 $form.Controls.Add($trkWhite)
 
-[void](New-Label $T.Gamma 20 156 180 18 9 $false $dim)
+[void](New-Label $Loc.Gamma 20 156 180 18 9 $false $dim)
 $lblGamma = New-Label '' 300 156 120 18 9 $true $null
 $lblGamma.TextAlign = 'MiddleRight'
 
@@ -290,7 +290,7 @@ $trkGamma.LargeChange = 2
 $trkGamma.Value = [math]::Max(18, [math]::Min(32, [int][math]::Round([double]$settings.Gamma * 10)))
 $form.Controls.Add($trkGamma)
 
-[void](New-Label $T.Profiles 20 230 200 18 9 $false $dim)
+[void](New-Label $Loc.Profiles 20 230 200 18 9 $false $dim)
 
 $presetButtons = @{}
 $px = 18
@@ -307,7 +307,7 @@ foreach ($key in $PresetKeys) {
 }
 
 $btnSave = New-Object System.Windows.Forms.Button
-$btnSave.Text = $T.SaveHere
+$btnSave.Text = $Loc.SaveHere
 $btnSave.Size = New-Object System.Drawing.Size(110, 32)
 $btnSave.Location = New-Object System.Drawing.Point(312, 250)
 $btnSave.FlatStyle = 'System'
@@ -321,36 +321,36 @@ $btnToggle.Font = New-Object System.Drawing.Font('Segoe UI', 10)
 $form.Controls.Add($btnToggle)
 
 $btnTests = New-Object System.Windows.Forms.Button
-$btnTests.Text = $T.Tests
+$btnTests.Text = $Loc.Tests
 $btnTests.Size = New-Object System.Drawing.Size(96, 38)
 $btnTests.Location = New-Object System.Drawing.Point(224, 298)
 $btnTests.FlatStyle = 'System'
 $form.Controls.Add($btnTests)
 
 $btnHide = New-Object System.Windows.Forms.Button
-$btnHide.Text = $T.ToTray
+$btnHide.Text = $Loc.ToTray
 $btnHide.Size = New-Object System.Drawing.Size(96, 38)
 $btnHide.Location = New-Object System.Drawing.Point(326, 298)
 $btnHide.FlatStyle = 'System'
 $form.Controls.Add($btnHide)
 
-[void](New-Label $T.GameHint 20 340 410 16 8 $false $dim)
+[void](New-Label $Loc.GameHint 20 340 410 16 8 $false $dim)
 $lblStatus = New-Label '' 20 358 410 18 8 $false $dim
 
 $testMenu = New-Object System.Windows.Forms.ContextMenuStrip
-foreach ($t in @(
-    @{ T = $T.TestShadow; F = 'gray-test.html'  },
-    @{ T = $T.TestBand;   F = 'band-test.html'  },
-    @{ T = $T.TestColor;  F = 'color-test.html' },
-    @{ T = $T.TestClip;   F = 'clip-test.html'  })) {
-    $item = $testMenu.Items.Add([string]$t.T)
-    $item.Tag = $t.F
+foreach ($entry in @(
+    @{ Label = $Loc.TestShadow; File = 'gray-test.html'  },
+    @{ Label = $Loc.TestBand;   File = 'band-test.html'  },
+    @{ Label = $Loc.TestColor;  File = 'color-test.html' },
+    @{ Label = $Loc.TestClip;   File = 'clip-test.html'  })) {
+    $item = $testMenu.Items.Add([string]$entry.Label)
+    $item.Tag = $entry.File
     $item.Add_Click({ Start-Process (Join-Path $Root $this.Tag) })
 }
 
 $trayIcon = New-Object System.Windows.Forms.NotifyIcon
 $trayIcon.Icon = $appIcon
-$trayIcon.Text = $T.Title
+$trayIcon.Text = $Loc.Title
 $trayIcon.Visible = $true
 $trayMenu = New-Object System.Windows.Forms.ContextMenuStrip
 $trayIcon.ContextMenuStrip = $trayMenu
@@ -372,20 +372,20 @@ function Save-Now {
 
 function Update-Labels {
     $gs = $script:Gamma.ToString('0.0', [System.Globalization.CultureInfo]::InvariantCulture)
-    $lblWhite.Text = $T.Nits -f $script:White
+    $lblWhite.Text = $Loc.Nits -f $script:White
     $lblGamma.Text = $gs
     if ($script:Enabled) {
-        $lblState.Text  = $T.StateOn -f $script:White, $gs
-        $btnToggle.Text = $T.GameMode
-        $trayIcon.Text  = $T.TrayOn -f $script:White, $gs
+        $lblState.Text  = $Loc.StateOn -f $script:White, $gs
+        $btnToggle.Text = $Loc.GameMode
+        $trayIcon.Text  = $Loc.TrayOn -f $script:White, $gs
         $trayIcon.Icon  = $appIcon
-        if ($itToggle) { $itToggle.Text = $T.GameToggle }
+        if ($itToggle) { $itToggle.Text = $Loc.GameToggle }
     } else {
-        $lblState.Text  = $T.StateOff
-        $btnToggle.Text = $T.RestoreCurve
-        $trayIcon.Text  = $T.TrayOff
+        $lblState.Text  = $Loc.StateOff
+        $btnToggle.Text = $Loc.RestoreCurve
+        $trayIcon.Text  = $Loc.TrayOff
         $trayIcon.Icon  = $appIconOff
-        if ($itToggle) { $itToggle.Text = $T.RestoreCurve }
+        if ($itToggle) { $itToggle.Text = $Loc.RestoreCurve }
     }
 }
 
@@ -394,13 +394,13 @@ function Invoke-Now {
     try {
         if ($script:Enabled) {
             [void](Invoke-Curve $script:White $script:Gamma)
-            $lblStatus.Text = $T.Applied -f $script:White, $gs
+            $lblStatus.Text = $Loc.Applied -f $script:White, $gs
         } else {
             [void](Clear-Curve)
-            $lblStatus.Text = $T.Cleared
+            $lblStatus.Text = $Loc.Cleared
         }
     } catch {
-        $lblStatus.Text = $T.Error -f $_.Exception.Message
+        $lblStatus.Text = $Loc.Error -f $_.Exception.Message
     }
     Update-Labels
     Save-Now
@@ -415,7 +415,7 @@ function Set-Preset([string]$Key) {
     $trkWhite.Value = $script:White
     $trkGamma.Value = [int][math]::Round($script:Gamma * 10)
     Invoke-Now
-    $lblStatus.Text = $T.ProfileSet -f (Get-PresetLabel $Key)
+    $lblStatus.Text = $Loc.ProfileSet -f (Get-PresetLabel $Key)
 }
 
 function Show-MainWindow {
@@ -440,7 +440,7 @@ $debounce.Add_Tick({ $debounce.Stop(); Invoke-Now })
 function Request-Apply {
     $debounce.Stop()
     Update-Labels
-    $lblStatus.Text = $T.Applying
+    $lblStatus.Text = $Loc.Applying
     $debounce.Start()
 }
 
@@ -464,13 +464,13 @@ $btnSave.Add_Click({
             $settings.Presets[$this.Tag].White = $script:White
             $settings.Presets[$this.Tag].Gamma = $script:Gamma
             Write-Settings $settings
-            $lblStatus.Text = $T.ProfileSaved -f (Get-PresetLabel $this.Tag)
+            $lblStatus.Text = $Loc.ProfileSaved -f (Get-PresetLabel $this.Tag)
         })
     }
     $menu.Show($btnSave, 0, $btnSave.Height)
 })
 
-$itShow = $trayMenu.Items.Add([string]$T.ShowWindow)
+$itShow = $trayMenu.Items.Add([string]$Loc.ShowWindow)
 $itShow.Font = New-Object System.Drawing.Font($trayMenu.Font, [System.Drawing.FontStyle]::Bold)
 $itShow.Add_Click({ Show-MainWindow })
 [void]$trayMenu.Items.Add('-')
@@ -480,10 +480,10 @@ foreach ($key in $PresetKeys) {
     $it.Add_Click({ Set-Preset $this.Tag })
 }
 [void]$trayMenu.Items.Add('-')
-$itToggle = $trayMenu.Items.Add([string]$T.GameToggle)
+$itToggle = $trayMenu.Items.Add([string]$Loc.GameToggle)
 $itToggle.Add_Click({ $script:Enabled = -not $script:Enabled; Invoke-Now })
 [void]$trayMenu.Items.Add('-')
-$itQuit = $trayMenu.Items.Add([string]$T.Quit)
+$itQuit = $trayMenu.Items.Add([string]$Loc.Quit)
 $itQuit.Add_Click({ Stop-App })
 
 $trayIcon.Add_DoubleClick({ Show-MainWindow })
@@ -496,7 +496,7 @@ $form.Add_FormClosing({
 })
 
 Update-Labels
-$lblStatus.Text = $T.Ready
+$lblStatus.Text = $Loc.Ready
 
 if ($Tray) {
     Invoke-Now
