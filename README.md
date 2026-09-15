@@ -1,87 +1,92 @@
 # win11-hdr-gamma-tuner
 
-Управление яркостью и гаммой монитора в HDR-режиме Windows 11 — там, где штатных
-средств для этого нет.
+Brightness and gamma control for Windows 11 HDR mode — where Windows gives you
+almost nothing.
 
-Сделано под Dell UltraSharp U4025QW, но работает на любом мониторе: параметры
-меряются заново тестами из комплекта.
+[Русская версия](README.ru.md)
 
----
+![Display Tuner](screenshot.png)
 
-## Зачем
-
-Windows 11 в HDR-режиме композитит SDR-контент через кусочно-линейную кривую sRGB,
-а не через степенную гамму 2.2. Тени получаются выцветшими, тёмный интерфейс —
-плоским. Лечится загрузкой корректирующей кривой в гамма-рамп видеокарты.
-
-Дальше начинаются неудобства, которые этот проект и убирает:
-
-- **Яркость в HDR регулируется только слайдером Windows**, у которого нет
-  программного интерфейса. Меню монитора в HDR заблокировано.
-- **Слайдер очищает гамма-рамп.** Подвинул яркость — кривая молча слетела,
-  и заметить это на глаз почти невозможно.
-- **Кривая давит нативный HDR в играх**, её надо снимать перед запуском.
-
-Display Tuner замораживает слайдер на одном значении и переносит управление
-яркостью в саму кривую. Дальше это обычное приложение: ползунки, профили,
-значок в трее, автозапуск.
+Built for a Dell UltraSharp U4025QW, but it works on any panel: the numbers that
+matter are measured with the bundled test pages.
 
 ---
 
-## Как это работает
+## Why
 
-Кривая считается в PQ-домене: в HDR-режиме гамма-рамп видеокарты работает по
-кодам финального сигнала, а в PQ код означает абсолютную яркость в нитах.
+In HDR mode Windows 11 composites SDR content through the piecewise sRGB curve
+instead of a power gamma 2.2. Shadows come out washed out and dark UI looks flat.
+The fix is a correction curve loaded into the GPU gamma ramp.
 
-Генератор принимает **два** уровня белого:
+That fix brings three annoyances, which this project removes:
 
-| параметр | что это | где живёт |
+- **Brightness in HDR is only adjustable through the Windows SDR slider**, which
+  has no programmatic API. The monitor's own brightness menu is locked in HDR.
+- **Moving that slider wipes the gamma ramp.** Your curve silently falls off and
+  there is almost no way to notice by eye.
+- **The curve also crushes native HDR in games**, so it has to be removed before
+  launching one.
+
+Display Tuner freezes the slider at a single value and moves brightness control
+into the curve itself. From there it is an ordinary app: sliders, profiles,
+a tray icon, autostart.
+
+---
+
+## How it works
+
+The curve is computed in the PQ domain. In HDR mode the GPU gamma ramp operates
+on final-signal codes, and in PQ a code means an absolute luminance in nits.
+
+The generator takes **two** white levels:
+
+| parameter | meaning | where it lives |
 |---|---|---|
-| `SliderNits` | куда Windows кладёт белый SDR-контента | слайдер Windows, ставится один раз |
-| `WhiteNits` | фактическая яркость, которую видит глаз | кривая, меняется программно |
+| `SliderNits` | where Windows puts SDR white | the Windows slider, set once |
+| `WhiteNits` | the brightness you actually see | the curve, changed in software |
 
-Когда они равны — это классическая коррекция гаммы. Когда `WhiteNits` меньше —
-яркость понижается без участия Windows.
+When they are equal you get classic gamma correction. When `WhiteNits` is lower,
+brightness drops without Windows being involved at all.
 
-Цена — сжатие кодового пространства: при белом 140 из 252 остаётся около 90%
-кодов. Проверяется тестом `band-test.html`; на глаз разницы в полосении нет.
+The cost is code-space compression: at 140 nits out of 252 about 90% of the codes
+remain. `band-test.html` checks this — no visible difference in banding.
 
-Выше `SliderNits` лежат света HDR-контента. Там кривая не единичная, а линейно
-поднимается в PQ-координатах от нового белого до пика — иначе на границе
-SDR-белого был бы разрыв.
+Above `SliderNits` sits the HDR highlight range. There the curve is not identity
+but a linear ramp in PQ coordinates from the new white up to peak; otherwise
+there would be a discontinuity right at SDR white.
 
 ---
 
-## Установка
+## Install
 
-**1. Скачать ArgyllCMS** с [argyllcms.com](https://www.argyllcms.com/downloadwin.html)
-и положить `dispwin.exe` из архива рядом со скриптами.
+**1. Get ArgyllCMS** from [argyllcms.com](https://www.argyllcms.com/downloadwin.html)
+and drop `dispwin.exe` next to the scripts.
 
-В репозитории его нет намеренно: ArgyllCMS распространяется под AGPL3/GPL2+,
-и класть чужой бинарник в чужую лицензию не стоит.
+It is deliberately not in this repository: ArgyllCMS ships under AGPL3/GPL2+,
+and bundling someone else's binary under someone else's terms is a bad trade.
 
-**2. Включить DDC/CI в мониторе:** `Menu → Others → DDC/CI → On`.
-Нужно, чтобы читать и править настройки монитора из скриптов.
+**2. Enable DDC/CI on the monitor:** `Menu → Others → DDC/CI → On`.
+Needed to read and change monitor settings from scripts.
 
-**3. Собрать приложение:**
+**3. Build the app:**
 
 ```powershell
 .\Build-Exe.ps1
 ```
 
-Рисует значок и компилирует `DisplayTuner.exe` компилятором из состава
-.NET Framework. Ставить ничего не надо.
+Draws the icon and compiles `DisplayTuner.exe` with the compiler shipped in
+.NET Framework. Nothing to install.
 
-**4. Развернуть:**
+**4. Deploy:**
 
 ```powershell
 .\Setup.bat
 ```
 
-Определит монитор и видеокарту, сгенерирует кривую, проведёт по ручным шагам
-и проверит, что кривая действительно легла в рамп.
+Detects the monitor and GPU, generates the curve, walks you through the manual
+steps and verifies the curve actually landed in the ramp.
 
-**5. Автозапуск** (от администратора):
+**5. Autostart** (as administrator):
 
 ```powershell
 .\Setup.bat -RegisterAutoStart
@@ -89,96 +94,101 @@ SDR-белого был бы разрыв.
 
 ---
 
-## Приложение
+## The app
 
 `DisplayTuner.exe`
 
-- ползунок яркости 80–252 нит;
-- ползунок гаммы 1.8–3.2;
-- профили День / Вечер / Ночь с перезаписью;
-- **игровой режим** — снимает кривую, чтобы не давить нативный HDR;
-- значок в трее, окно сворачивается туда;
-- настройки помнятся в `tuner-settings.json`.
+- brightness slider, 80–252 nits;
+- gamma slider, 1.8–3.2;
+- Day / Evening / Night profiles, overwritable;
+- **game mode** — drops the curve so native HDR is not crushed;
+- tray icon; the window minimises there;
+- settings persist in `tuner-settings.json`.
 
-Ключи: `-Tray` — фоновый запуск со значком в трее (его ставит автозагрузка),
-`-Apply` — применить сохранённое и выйти.
+Switches: `-Tray` starts in the background with a tray icon (this is what
+autostart registers), `-Apply` applies the saved settings and exits.
+
+> The UI is currently Russian only.
 
 ---
 
-## Тесты
+## Test pages
 
-Все на canvas с попиксельной отрисовкой: браузерный дизер на градиентах
-замазывает ровно то, что нужно увидеть.
+All of them draw pixel by pixel on a canvas: the browser's dithering on CSS
+gradients smears exactly what you need to see.
 
-| файл | что проверяет |
+| file | what it checks |
 |---|---|
-| `gray-test.html` | различимость теней, равномерность шагов, гамма |
-| `band-test.html` | полосение: узкие диапазоны кодов во всю ширину экрана |
-| `color-test.html` | не упирается ли цвет в границу гамута |
-| `clip-test.html` | потолок белого панели |
+| `gray-test.html` | shadow discrimination, step evenness, gamma |
+| `band-test.html` | banding: narrow code ranges stretched across the screen |
+| `color-test.html` | whether colour is clipping at the gamut boundary |
+| `clip-test.html` | the panel's white ceiling |
 
-`clip-test.html` устроен так, чтобы обойти локальное затемнение, которое на
-многих мониторах не отключается: вместо пятна на фоне рисуются чередующиеся
-полосы двух близких кодов по всему экрану. Внутри каждой зоны подсветки оба
-кода лежат поровну, и затемнение выпадает из уравнения.
-
----
-
-## Настройка под свой монитор
-
-Потолок белого у каждой панели свой, и на нём держится всё остальное.
-
-1. `clip-test.html`, пара 255/250, на весь экран, подержать 30–40 секунд
-   (ABL включается не сразу).
-2. Спускать слайдер Windows, пока полосы не станут различимы.
-3. Найденное значение задать: `Setup.bat -SliderNits <нит>`,
-   где нит = 80 + 4 × процент слайдера.
+`clip-test.html` is built to defeat local dimming, which many monitors do not let
+you turn off. Instead of a patch on a background it draws alternating stripes of
+two close codes across the whole screen. Every backlight zone then contains both
+codes in equal measure, and dimming drops out of the equation.
 
 ---
 
-## Прочие инструменты
+## Calibrating your own panel
 
-| файл | назначение |
+The white ceiling differs per panel, and everything else hangs off it.
+
+1. Open `clip-test.html`, pair 255/250, fullscreen, hold for 30–40 seconds
+   (ABL does not kick in immediately).
+2. Lower the Windows slider until the stripes become distinguishable.
+3. Feed the result in: `Setup.bat -SliderNits <nits>`,
+   where nits = 80 + 4 × slider percent.
+
+---
+
+## Other tools
+
+| file | purpose |
 |---|---|
-| `LutGen.ps1` | генератор кривых, подключается через точку |
-| `Monitor-VCP.ps1` | настройки монитора по DDC/CI через штатный Windows API |
-| `Sensor-Probe.ps1` | снимки VCP-кодов и сравнение — для разбора вендорских кодов |
-| `New-Icon.ps1` | рисует значок приложения |
-| `Set-DisplayMode.ps1` | профили hdr / sdr / sdr-night / off |
+| `LutGen.ps1` | curve generator, dot-sourced by everything else |
+| `Monitor-VCP.ps1` | monitor settings over DDC/CI through the stock Windows API |
+| `Sensor-Probe.ps1` | VCP code snapshots and diffs, for reverse-engineering vendor codes |
+| `New-Icon.ps1` | draws the app icon |
+| `Set-DisplayMode.ps1` | hdr / sdr / sdr-night / off profiles |
 
-Сторонних программ для работы с DDC/CI не нужно: всё через `dxva2.dll`.
-
----
-
-## Известное
-
-- **Насыщенность в HDR не поднимается ничем, кроме драйвера видеокарты.**
-  Ручки Hue/Saturation в меню монитора в HDR заблокированы, по DDC/CI коды
-  `8A` и `90` не отдаются, Windows HDR Calibration эффекта не даёт.
-  Остаётся Digital Vibrance у NVIDIA и его аналоги у AMD и Intel.
-- **Гамма — это не насыщенность.** Поканальная степень разводит каналы вниз:
-  цвет сочнее, но картинка темнее и тени закрываются.
-- **Одномерная кривая матрицу насыщенности не заменит.** В `.cal` и vcgt
-  красный на выходе зависит только от красного на входе.
-- **Датчик освещённости монитора наружу не выведен.** Ни как системный сенсор,
-  ни через DDC/CI — проверено снимками всех кодов при разном освещении.
-
-Подробный разбор, включая измерения и тупиковые ветки, — в [CLAUDE.md](CLAUDE.md).
+No third-party DDC/CI utility is needed — everything goes through `dxva2.dll`.
 
 ---
 
-## Лицензия
+## Findings
 
-MIT — см. [LICENSE](LICENSE).
+Things that were tested and turned out to be dead ends, so you don't repeat them:
 
-`dispwin.exe` из ArgyllCMS в репозиторий не входит и распространяется под
-AGPL3/GPL2+ на своих условиях.
+- **Saturation in HDR cannot be raised by anything except the GPU driver.**
+  Hue/Saturation in the monitor OSD are locked in HDR, VCP codes `8A` and `90`
+  are not exposed over DDC/CI, and Windows HDR Calibration does nothing visible.
+  What remains is NVIDIA Digital Vibrance and its AMD/Intel equivalents.
+- **Gamma is not saturation.** A per-channel power spreads the channels
+  *downward*: colour gets more vivid, but the picture darkens and shadows close up.
+- **A 1D curve cannot replace a saturation matrix.** In `.cal` and vcgt the red
+  output depends only on the red input, so no such file can exist.
+- **The monitor's ambient light sensor is not exposed.** Neither as a system
+  sensor nor over DDC/CI — verified by snapshotting every VCP code under
+  different lighting.
+
+The full write-up, including measurements, is in [CLAUDE.md](CLAUDE.md) (Russian).
 
 ---
 
-## Требования
+## License
 
-- Windows 11 с включённым HDR
-- PowerShell 5.1 (штатный) и .NET Framework 4
-- `dispwin.exe` из ArgyllCMS
-- DDC/CI в мониторе — для чтения его настроек (не обязательно для кривых)
+MIT — see [LICENSE](LICENSE).
+
+`dispwin.exe` from ArgyllCMS is not part of this repository and is distributed
+under AGPL3/GPL2+ on its own terms.
+
+---
+
+## Requirements
+
+- Windows 11 with HDR enabled
+- PowerShell 5.1 (stock) and .NET Framework 4
+- `dispwin.exe` from ArgyllCMS
+- DDC/CI on the monitor — for reading its settings (not required for the curves)
