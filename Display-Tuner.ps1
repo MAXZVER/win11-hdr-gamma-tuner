@@ -35,6 +35,7 @@ $Dispwin      = Join-Path $Root 'dispwin.exe'
 $CurrentLut   = Join-Path $Root 'current.cal'
 $SettingsFile = Join-Path $Root 'tuner-settings.json'
 $IconFile     = Join-Path $Root 'Display-Tuner.ico'
+$IconFileOff  = Join-Path $Root 'Display-Tuner-off.ico'
 
 $SliderNits = 252     # where the Windows slider is parked (43%)
 $SliderPct  = [int](($SliderNits - 80) / 4)
@@ -228,6 +229,8 @@ public class Win32Show {
 
 $appIcon = if (Test-Path $IconFile) { New-Object System.Drawing.Icon $IconFile }
            else { [System.Drawing.SystemIcons]::Application }
+# серый значок для игрового режима: состояние должно читаться прямо в трее
+$appIconOff = if (Test-Path $IconFileOff) { New-Object System.Drawing.Icon $IconFileOff } else { $appIcon }
 
 $form                 = New-Object System.Windows.Forms.Form
 $form.Text            = $T.Title
@@ -375,11 +378,13 @@ function Update-Labels {
         $lblState.Text  = $T.StateOn -f $script:White, $gs
         $btnToggle.Text = $T.GameMode
         $trayIcon.Text  = $T.TrayOn -f $script:White, $gs
+        $trayIcon.Icon  = $appIcon
         if ($itToggle) { $itToggle.Text = $T.GameToggle }
     } else {
         $lblState.Text  = $T.StateOff
         $btnToggle.Text = $T.RestoreCurve
         $trayIcon.Text  = $T.TrayOff
+        $trayIcon.Icon  = $appIconOff
         if ($itToggle) { $itToggle.Text = $T.RestoreCurve }
     }
 }

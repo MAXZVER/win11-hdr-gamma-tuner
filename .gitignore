@@ -5,6 +5,7 @@ dispwin.exe
 # Результаты сборки
 DisplayTuner.exe
 Display-Tuner.ico
+Display-Tuner-off.ico
 *.lnk
 
 # Кривые генерируются на месте из LutGen.ps1

@@ -101,7 +101,8 @@ steps and verifies the curve actually landed in the ramp.
 - brightness slider, 80–252 nits;
 - gamma slider, 1.8–3.2;
 - Day / Evening / Night profiles, overwritable;
-- **game mode** — drops the curve so native HDR is not crushed;
+- **game mode** — drops the curve so native HDR is not crushed; the tray icon
+  turns grey so the state is readable without opening anything;
 - tray icon; the window minimises there;
 - settings persist in `tuner-settings.json`.
 

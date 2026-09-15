@@ -12,10 +12,16 @@
 Add-Type -AssemblyName System.Drawing
 
 $Root  = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$Out   = Join-Path $Root 'Display-Tuner.ico'
 $Sizes = @(16, 20, 24, 32, 40, 48, 64, 96, 128)
 
-function New-Glyph([int]$S) {
+# два значка: рабочий и для игрового режима, когда коррекция снята.
+# Серый читается как «выключено» даже в 16 пикселях, в отличие от мелких пометок.
+$Variants = @(
+    @{ File = 'Display-Tuner.ico';     Top = @(255, 190,  70); Bottom = @(243, 116,  20) }
+    @{ File = 'Display-Tuner-off.ico'; Top = @(168, 172, 178); Bottom = @( 96, 100, 108) }
+)
+
+function New-Glyph([int]$S, $Top, $Bottom) {
     $bmp = New-Object System.Drawing.Bitmap -ArgumentList ([int]$S), ([int]$S), ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     $g.SmoothingMode = 'AntiAlias'
@@ -38,8 +44,8 @@ function New-Glyph([int]$S) {
     $rect = New-Object System.Drawing.RectangleF -ArgumentList $pad, $pad, $side, $side
     $bg = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
         $rect,
-        [System.Drawing.Color]::FromArgb(255, 255, 190, 70),
-        [System.Drawing.Color]::FromArgb(255, 243, 116, 20),
+        [System.Drawing.Color]::FromArgb(255, $Top[0], $Top[1], $Top[2]),
+        [System.Drawing.Color]::FromArgb(255, $Bottom[0], $Bottom[1], $Bottom[2]),
         90.0)
     $g.FillPath($bg, $path)
 
@@ -120,33 +126,38 @@ function Get-DibBytes([System.Drawing.Bitmap]$Bmp) {
     return ,$bytes      # запятая обязательна: иначе PowerShell развернёт массив
 }
 
-$frames = @()
-foreach ($s in $Sizes) {
-    $b = New-Glyph $s
-    $frames += ,@{ Size = $s; Bytes = (Get-DibBytes $b) }
-    $b.Dispose()
-}
-
-$fs = [System.IO.File]::Create($Out)
-$bw = New-Object System.IO.BinaryWriter $fs
-try {
-    $bw.Write([uint16]0)
-    $bw.Write([uint16]1)
-    $bw.Write([uint16]$frames.Count)
-
-    $offset = 6 + 16 * $frames.Count
-    foreach ($f in $frames) {
-        $dim = if ($f.Size -ge 256) { 0 } else { $f.Size }
-        $bw.Write([byte]$dim); $bw.Write([byte]$dim)
-        $bw.Write([byte]0);    $bw.Write([byte]0)
-        $bw.Write([uint16]1);  $bw.Write([uint16]32)
-        $bw.Write([uint32]$f.Bytes.Length)
-        $bw.Write([uint32]$offset)
-        $offset += $f.Bytes.Length
+foreach ($v in $Variants) {
+    $frames = @()
+    foreach ($s in $Sizes) {
+        $b = New-Glyph $s $v.Top $v.Bottom
+        $frames += ,@{ Size = $s; Bytes = (Get-DibBytes $b) }
+        $b.Dispose()
     }
-    foreach ($f in $frames) { $bw.Write($f.Bytes) }
-} finally {
-    $bw.Flush(); $bw.Dispose(); $fs.Dispose()
+
+    $out = Join-Path $Root $v.File
+    $fs = [System.IO.File]::Create($out)
+    $bw = New-Object System.IO.BinaryWriter $fs
+    try {
+        $bw.Write([uint16]0)
+        $bw.Write([uint16]1)
+        $bw.Write([uint16]$frames.Count)
+
+        $offset = 6 + 16 * $frames.Count
+        foreach ($f in $frames) {
+            $dim = if ($f.Size -ge 256) { 0 } else { $f.Size }
+            $bw.Write([byte]$dim); $bw.Write([byte]$dim)
+            $bw.Write([byte]0);    $bw.Write([byte]0)
+            $bw.Write([uint16]1);  $bw.Write([uint16]32)
+            $bw.Write([uint32]$f.Bytes.Length)
+            $bw.Write([uint32]$offset)
+            $offset += $f.Bytes.Length
+        }
+        foreach ($f in $frames) { $bw.Write($f.Bytes) }
+    } finally {
+        $bw.Flush(); $bw.Dispose(); $fs.Dispose()
+    }
+
+    Write-Host ("готово: {0}  ({1:N0} байт)" -f $out, (Get-Item $out).Length) -ForegroundColor Green
 }
 
-Write-Host ("готово: {0}  ({1:N0} байт, размеры {2})" -f $Out, (Get-Item $Out).Length, ($Sizes -join ', ')) -ForegroundColor Green
+Write-Host ("размеры: {0}" -f ($Sizes -join ', ')) -ForegroundColor DarkGray
