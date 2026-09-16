@@ -257,6 +257,7 @@ using System; using System.Runtime.InteropServices;
 public class Win32Show {
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
 }
 "@
 }
@@ -414,7 +415,9 @@ $trayIcon.Icon = $appIcon
 $trayIcon.Text = $Loc.Title
 $trayIcon.Visible = $true
 $trayMenu = New-Object System.Windows.Forms.ContextMenuStrip
-$trayIcon.ContextMenuStrip = $trayMenu
+# ContextMenuStrip намеренно НЕ присваивается значку: меню, показанное самим
+# NotifyIcon, закрывается мгновенно, если у приложения нет активного окна,
+# а у нас оно спрятано в трей. Показываем меню вручную ниже.
 
 # ------------------------------------------------------------------ behaviour
 $script:White    = [int]$trkWhite.Value
@@ -568,14 +571,20 @@ $itToggle.Add_Click({ $script:Enabled = -not $script:Enabled; Invoke-Now })
 $itQuit = $trayMenu.Items.Add([string]$Loc.Quit)
 $itQuit.Add_Click({ Stop-App })
 
-# Одиночный левый клик тоже открывает окно: по правой кнопке показывается меню,
-# и без левого обработчика клик по значку выглядел как "ничего не происходит",
-# а появлявшееся меню принимали за окно.
-$trayIcon.Add_MouseClick({
+# Левая кнопка открывает окно, правая показывает меню.
+# Перед показом меню окно приложения делается активным, иначе Windows закрывает
+# меню при первом же движении мыши; завершающий WM_NULL - известный приём,
+# без него меню не закрывается по клику мимо него.
+$trayIcon.Add_MouseUp({
     param($sender, $e)
-    if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) { Show-MainWindow }
+    if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
+        Show-MainWindow
+    } elseif ($e.Button -eq [System.Windows.Forms.MouseButtons]::Right) {
+        [void][Win32Show]::SetForegroundWindow($form.Handle)
+        $trayMenu.Show([System.Windows.Forms.Control]::MousePosition)
+        [void][Win32Show]::PostMessage($form.Handle, 0, [IntPtr]::Zero, [IntPtr]::Zero)
+    }
 })
-$trayIcon.Add_DoubleClick({ Show-MainWindow })
 
 # сворачивание и закрытие прячут окно; приложение живёт в трее
 $form.Add_Resize({ if ($form.WindowState -eq 'Minimized') { $form.Hide() } })
