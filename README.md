@@ -108,8 +108,13 @@ wiped.
 - tray icon; the window minimises there;
 - settings persist in `tuner-settings.json`.
 
+Only one instance runs at a time. With autostart on, the app is already
+sitting in the tray when you log in, so launching it again just brings that
+window up instead of starting a second copy. You can also double-click the
+tray icon or use *Show window* in its menu.
+
 Switches: `-Tray` starts in the background with a tray icon (this is what
-autostart registers), `-Apply` applies the saved settings and exits,
+autostart uses), `-Apply` applies the saved settings and exits,
 `-Lang en|ru` forces a language.
 
 The interface follows the system locale — English everywhere except Russian

@@ -235,8 +235,19 @@ Add-Type -AssemblyName System.Drawing
 # Один экземпляр на пользователя: приложение стартует при входе и живёт в трее,
 # второй запуск должен просто показать уже работающее окно, а не поднять копию.
 $mutexName = 'Local\DisplayTuner_' + $env:USERNAME
+$wakeName  = 'Local\DisplayTuner_Show_' + $env:USERNAME
+
+# Именованное событие, по которому работающий экземпляр показывает окно.
+# Без него повторный запуск просто выходил, и со стороны это выглядело как
+# "приложение не открывается": оно уже работало в трее со скрытым окном.
+$script:WakeEvent = New-Object System.Threading.EventWaitHandle(
+    $false, [System.Threading.EventResetMode]::AutoReset, $wakeName)
+
 $script:Mutex = New-Object System.Threading.Mutex($true, $mutexName, [ref]$null)
-if (-not $script:Mutex.WaitOne(0)) { exit }
+if (-not $script:Mutex.WaitOne(0)) {
+    [void]$script:WakeEvent.Set()
+    exit
+}
 
 # Процесс запускается скрытым, чтобы не мелькала консоль. Побочный эффект:
 # первое окно наследует флаг «скрыто» из startup info и само не показывается.
@@ -657,6 +668,13 @@ Update-Language
 $lblStatus.Text = $Loc.Ready
 
 $chkAuto.Checked = Test-Autostart
+
+# WndProc в PowerShell не переопределить без подкласса формы, поэтому событие
+# опрашивается таймером - раз в 600 мс, нагрузки это не создаёт
+$wake = New-Object System.Windows.Forms.Timer
+$wake.Interval = 600
+$wake.Add_Tick({ if ($script:WakeEvent.WaitOne(0)) { Show-MainWindow } })
+$wake.Start()
 
 if ($Tray) {
     # Дисплей на логоне инициализируется не мгновенно: если применить кривую
