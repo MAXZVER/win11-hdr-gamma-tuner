@@ -568,6 +568,13 @@ $itToggle.Add_Click({ $script:Enabled = -not $script:Enabled; Invoke-Now })
 $itQuit = $trayMenu.Items.Add([string]$Loc.Quit)
 $itQuit.Add_Click({ Stop-App })
 
+# Одиночный левый клик тоже открывает окно: по правой кнопке показывается меню,
+# и без левого обработчика клик по значку выглядел как "ничего не происходит",
+# а появлявшееся меню принимали за окно.
+$trayIcon.Add_MouseClick({
+    param($sender, $e)
+    if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left) { Show-MainWindow }
+})
 $trayIcon.Add_DoubleClick({ Show-MainWindow })
 
 # сворачивание и закрытие прячут окно; приложение живёт в трее
