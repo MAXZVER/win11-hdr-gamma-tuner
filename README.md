@@ -106,6 +106,10 @@ wiped.
 - **game mode** — drops the curve so native HDR is not crushed; the tray icon
   turns grey so the state is readable without opening anything;
 - tray icon; the window minimises there;
+- **self-healing**: the gamma ramp gets wiped by sleep/wake, resolution changes
+  and HDR toggling, and losing the correction is almost impossible to notice by
+  eye. The app checks every 10 seconds and reloads the curve if the ramp went
+  linear;
 - settings persist in `tuner-settings.json`.
 
 Only one instance runs at a time. With autostart on, the app is already

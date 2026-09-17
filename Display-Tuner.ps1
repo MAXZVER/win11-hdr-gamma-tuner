@@ -81,6 +81,7 @@ $Strings = @{
         GameToggle   = 'Game mode (drop the curve)'
         Quit         = 'Quit'
         Restart      = 'Settings saved. The app will restart to pick them up.'
+        Restored     = 'curve was wiped by the system - restored'
         Day          = 'Day'
         Evening      = 'Evening'
         Night        = 'Night'
@@ -122,6 +123,7 @@ $Strings = @{
         GameToggle   = 'Игровой режим (снять кривую)'
         Quit         = 'Выход'
         Restart      = 'Настройки сохранены. Приложение перезапустится, чтобы их подхватить.'
+        Restored     = 'кривую стёрла система — восстановлена'
         Day          = 'День'
         Evening      = 'Вечер'
         Night        = 'Ночь'
@@ -687,6 +689,29 @@ $chkAuto.Checked = Test-Autostart
 
 # WndProc в PowerShell не переопределить без подкласса формы, поэтому событие
 # опрашивается таймером - раз в 600 мс, нагрузки это не создаёт
+# Сторож. Гамма-рамп чистится не только нами: пробуждение из сна, смена
+# разрешения, переключение HDR - и коррекция молча пропадает. Заметить это
+# на глаз почти невозможно, поэтому сверяем рамп с тем, каким мы его
+# оставили. Следим только при включённой коррекции: в игровом режиме рамп
+# должен быть линейным, и трогать его нельзя.
+$guard = New-Object System.Windows.Forms.Timer
+$guard.Interval = 10000
+# Исключение внутри обработчика таймера снимает подписку, и сторож молча
+# перестаёт работать после первого же сбоя. Поэтому тело в try/catch.
+$guard.Add_Tick({
+    try {
+        if (-not $script:Enabled) { return }
+        # Проверяем ровно то, что ломается: рамп сброшен в линейный.
+        # Сравнение с запомненным значением было лишней зависимостью -
+        # достаточно факта, что коррекции больше нет.
+        if ((Get-RampDeviation) -lt 256) {
+            [void](Invoke-Curve $script:White $script:Gamma)
+            $lblStatus.Text = $Loc.Restored
+        }
+    } catch { }
+})
+$guard.Start()
+
 $wake = New-Object System.Windows.Forms.Timer
 $wake.Interval = 600
 $wake.Add_Tick({ if ($script:WakeEvent.WaitOne(0)) { Show-MainWindow } })
